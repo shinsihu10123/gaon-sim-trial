@@ -26,8 +26,9 @@ for (const fragment of [
 if (!modelRoot.includes("pub spatial: WorldSpatialState")) {
   throw new Error("WorldState does not own WorldSpatialState");
 }
-if (!save.includes("pub const SAVE_FORMAT_VERSION: u32 = 2")) {
-  throw new Error("save format was not advanced for Stage 2.1 topology");
+const versionMatch = save.match(/pub const SAVE_FORMAT_VERSION: u32 = (\d+)/);
+if (versionMatch === null || Number(versionMatch[1]) < 2) {
+  throw new Error("Stage 2.1 requires a versioned save format v2 or newer");
 }
 for (const fragment of ["write_region", "read_region", "write_optional_country", "read_optional_country"]) {
   if (!binary.includes(fragment)) {
@@ -45,4 +46,4 @@ for (const fragment of [
   }
 }
 
-console.log("Stage 2.1 world data contract verified");
+console.log(`Stage 2.1 world data contract verified on save format v${versionMatch[1]}`);
