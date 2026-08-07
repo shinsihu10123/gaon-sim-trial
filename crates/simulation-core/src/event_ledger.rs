@@ -1,4 +1,6 @@
-use simulation_model::{EventCategory, EventId, EventPayload, EventRecord, EventSource, SimulationDate};
+use simulation_model::{
+    EventCategory, EventId, EventPayload, EventRecord, EventSource, SimulationDate,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct EventDraft {
