@@ -1,9 +1,15 @@
 #![forbid(unsafe_code)]
 
 mod event;
+mod terrain;
 mod world;
 
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
+pub use terrain::{
+    trial_terrain_bounds, BiomeClass, ReliefClass, TerrainError, TerrainSample, TerrainState,
+    TERRAIN_GRID_SIDE, TERRAIN_GRID_SPACING_M, TERRAIN_SAMPLE_COUNT, TERRAIN_SEA_LEVEL_M,
+    TRIAL_WORLD_HALF_EXTENT_M,
+};
 pub use world::{
     MapPoint, RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialError,
     WorldSpatialState, TRIAL_REGION_COUNT,
@@ -257,6 +263,7 @@ pub struct WorldState {
     pub date: SimulationDate,
     pub elapsed_days: u64,
     pub seed: u64,
+    pub terrain: Option<TerrainState>,
     pub spatial: WorldSpatialState,
 }
 
@@ -267,6 +274,7 @@ impl WorldState {
             date: SimulationDate::START,
             elapsed_days: 0,
             seed,
+            terrain: None,
             spatial: WorldSpatialState::uninitialized(),
         }
     }
@@ -285,6 +293,7 @@ mod tests {
         assert_eq!(world.date, SimulationDate::START);
         assert_eq!(world.elapsed_days, 0);
         assert_eq!(world.seed, 42);
+        assert!(world.terrain.is_none());
         assert!(!world.spatial.is_initialized());
         assert!(world.spatial.regions.is_empty());
     }
