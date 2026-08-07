@@ -16,8 +16,8 @@ Status: **IN PROGRESS**
 - Seed-derived island generation and landmass topology
 - Deterministic downstream routing, drainage-basin IDs and flow accumulation
 - River-order derivation
-- Save format v4 migration in progress for derived geography
-- RenderSnapshot v3 migration in progress for hydrology/landmass arrays
+- Save format v4 migration queued for derived geography
+- RenderSnapshot v3 migration queued for hydrology/landmass arrays
 - Browser WASM terrain bootstrap
 - Headless terrain replay reconstruction
 - Three.js authoritative heightfield and sea-level mesh
@@ -26,10 +26,11 @@ Status: **IN PROGRESS**
 
 ## Validation status
 
-- rustfmt: pending after hydrology schema migration
-- strict Clippy: pending after hydrology schema migration
-- complete Rust workspace tests: pending after hydrology schema migration
-- headless deterministic regression: pending after hydrology schema migration
+- one-shot hydrology schema migration: triggered
+- rustfmt: pending after migration
+- strict Clippy: pending after migration
+- complete Rust workspace tests: pending after migration
+- headless deterministic regression: pending after migration
 - locked Cargo graph verification: pending
 - actual browser WASM build: pending
 - npm ci: pending
