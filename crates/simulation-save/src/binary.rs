@@ -957,9 +957,9 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use simulation_model::{
-        BiomeClass, MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface,
-        ReliefClass, TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,
-        TERRAIN_SAMPLE_COUNT, TRIAL_REGION_COUNT,
+        BiomeClass, EntityRegistry, MapPoint, RegionId, RegionPoliticalState, RegionState,
+        RegionSurface, ReliefClass, TerrainSample, TerrainState, WorldBounds, WorldSpatialState,
+        WorldState, TERRAIN_SAMPLE_COUNT, TRIAL_REGION_COUNT,
     };
 
     use super::{decode_snapshot, encode_snapshot};
@@ -968,14 +968,14 @@ mod tests {
     fn trial_spatial() -> WorldSpatialState {
         let regions = (1..=TRIAL_REGION_COUNT)
             .map(|index| {
-                let id = RegionId(u16::try_from(index).expect("id fits u16"));
+                let id = RegionId(u64::try_from(index).expect("id fits u64"));
                 let x = i32::try_from(index).expect("index fits i32") * 100;
                 let mut neighbors = Vec::new();
                 if index > 1 {
-                    neighbors.push(RegionId(u16::try_from(index - 1).expect("id fits u16")));
+                    neighbors.push(RegionId(u64::try_from(index - 1).expect("id fits u64")));
                 }
                 if index < TRIAL_REGION_COUNT {
-                    neighbors.push(RegionId(u16::try_from(index + 1).expect("id fits u16")));
+                    neighbors.push(RegionId(u64::try_from(index + 1).expect("id fits u64")));
                 }
                 RegionState {
                     id,
