@@ -37,8 +37,8 @@ Current integration gate:
 - rustfmt and model-level strict Clippy findings are resolved
 - Save validation recognizes System command attribution
 - Save registry iteration/import findings are corrected
-- spatial canonical and binary codec test fixtures are migrated from u16 Region IDs to u64 Stable IDs
-- simulation-protocol fixtures now use u64 Region IDs and verify decimal-string RenderSnapshot IDs
-- permanent Core/Viewer CI is proceeding into remaining workspace tests and headless replay validation
+- spatial canonical, binary codec, protocol and world-spatial test fixtures now use u64 Stable IDs
+- protocol verifies decimal-string RenderSnapshot IDs
+- permanent Core/Viewer CI is proceeding toward full tests and headless replay
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
