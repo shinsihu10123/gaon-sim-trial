@@ -51,13 +51,13 @@ impl SimulationDate {
     }
 
     #[must_use]
-    pub const fn month_length(self) -> u8 {
+    pub fn month_length(self) -> u8 {
         Self::MONTH_LENGTHS[(self.month.saturating_sub(1).min(11)) as usize]
     }
 
     /// Quarter number in the range 1..=4.
     #[must_use]
-    pub const fn quarter(self) -> u8 {
+    pub fn quarter(self) -> u8 {
         ((self.month.saturating_sub(1).min(11)) / 3) + 1
     }
 
