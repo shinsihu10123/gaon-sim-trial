@@ -1,13 +1,10 @@
-use crate::{CommandId, CountryId, SimulationDate};
+use crate::{CommandId, CountryId, EntityRef, SimulationDate};
 
 /// Monotonic identifier assigned to an immutable world event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EventId(pub u64);
 
 /// Stable top-level event categories used by the Event Ledger and UI filters.
-///
-/// Categories exist before their full domain systems so later stages can emit
-/// typed facts without redesigning the ledger storage contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EventCategory {
     System,
@@ -19,6 +16,7 @@ pub enum EventCategory {
     Occupation,
     Treaty,
     UserIntervention,
+    EntityLifecycle,
 }
 
 /// Origin that caused or authored an event.
@@ -29,14 +27,12 @@ pub enum EventSource {
     Country(CountryId),
 }
 
-/// Typed facts currently emitted by the Stage 1 core.
-///
-/// Later domain stages extend this enum with economic, diplomatic, military,
-/// war, occupation and treaty facts. Stage 1 deliberately records only facts
-/// that truly exist at this point in development.
+/// Typed immutable facts emitted by the simulation core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventPayload {
     CommandExecuted { command_id: CommandId },
+    EntityCreated { entity: EntityRef },
+    EntityRemoved { entity: EntityRef },
 }
 
 /// Immutable fact stored in the append-only Event Ledger.
@@ -71,25 +67,21 @@ impl EventFilter {
         {
             return false;
         }
-
         if self.source.is_some_and(|source| event.source != source) {
             return false;
         }
-
         if self
             .from_date
             .is_some_and(|from_date| event.occurred_on < from_date)
         {
             return false;
         }
-
         if self
             .through_date
             .is_some_and(|through_date| event.occurred_on > through_date)
         {
             return false;
         }
-
         true
     }
 }
@@ -97,7 +89,7 @@ impl EventFilter {
 #[cfg(test)]
 mod tests {
     use super::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
-    use crate::{CommandId, CountryId, SimulationDate};
+    use crate::{CommandId, CountryId, EntityRef, SimulationDate};
 
     fn sample_event() -> EventRecord {
         EventRecord {
@@ -132,5 +124,13 @@ mod tests {
             ..filter
         };
         assert!(!wrong_country.matches(&sample_event()));
+    }
+
+    #[test]
+    fn lifecycle_payload_keeps_typed_entity_reference() {
+        let payload = EventPayload::EntityCreated {
+            entity: EntityRef::country(CountryId(12)),
+        };
+        assert!(matches!(payload, EventPayload::EntityCreated { entity } if entity == EntityRef::country(CountryId(12))));
     }
 }
