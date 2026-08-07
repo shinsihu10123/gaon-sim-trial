@@ -30,7 +30,7 @@ const coreFragments = [
   "pub fn step_one_month(&mut self) -> AdvanceReport",
   "pub const fn render_stride_days(self) -> u32",
   "scaled_nanosecond_remainder: u128",
-  "elapsed.as_nanos()",
+  "as_nanos()",
 ];
 
 for (const fragment of modelFragments) {
