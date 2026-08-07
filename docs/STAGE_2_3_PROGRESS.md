@@ -18,15 +18,15 @@ Status: **IN PROGRESS**
 - permanent Stage 2.3 source-contract validation chained into Viewer CI
 - calibration assumptions documented separately from empirical claims
 
-## Pending validation
+## Validation status
 
-- rustfmt
-- strict Clippy
-- complete locked Rust workspace tests
-- existing Stage 1/2 regression suite
-- actual WASM build
-- npm ci
-- TypeScript typecheck
-- Vite production build
-- Stage 2.1 / 2.2 / 2.3 source contracts
-- final PASS evidence
+- one-shot rustfmt normalization: triggered
+- strict Clippy: pending after formatting
+- complete locked Rust workspace tests: pending
+- existing Stage 1/2 regression suite: pending
+- actual WASM build: pending
+- npm ci: pending
+- TypeScript typecheck: pending
+- Vite production build: pending
+- Stage 2.1 / 2.2 / 2.3 source contracts: pending
+- final PASS evidence: pending
