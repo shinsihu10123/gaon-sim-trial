@@ -18,18 +18,19 @@ Status: **IN PROGRESS**
 - representative-seed distribution-balance envelope and concentration diagnostics
 - Stage 2.4 architecture and calibration-status documentation
 
-## Integration now being applied
+## Integration status
 
 - resource model exposed through `simulation-model` public API
 - authoritative resource field added to `WorldState`
-- one-shot integration is wiring save format v4, binary codec, WASM and headless entry paths
-- canonical digest will include resource stocks through authoritative binary serialization
+- save format v4, binary codec, WASM and headless initialization wired
+- canonical digest includes resource stocks through authoritative binary serialization
+- extraction-state round-trip regression added
+- Cargo lockfile refresh in progress for the new workspace dev-dependency edge
 
 ## Remaining before PASS
 
-- exact save/load extraction-state round-trip test
-- same-seed/different-seed tests on integrated authoritative state
 - strict Clippy / locked Rust tests
+- representative-seed balance tests
 - headless save/load/replay validation
 - permanent source-contract validation
 - final evidence and PR merge
