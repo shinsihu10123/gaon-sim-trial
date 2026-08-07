@@ -197,15 +197,25 @@ fn summarize_terrain_effects(terrain: &TerrainState) -> TerrainEffectSummary {
             continue;
         }
         land_count += 1;
-        summary.agriculture_min = summary.agriculture_min.min(effect.agriculture_yield_permille);
-        summary.agriculture_max = summary.agriculture_max.max(effect.agriculture_yield_permille);
-        summary.construction_min = summary.construction_min.min(effect.construction_cost_permille);
-        summary.construction_max = summary.construction_max.max(effect.construction_cost_permille);
+        summary.agriculture_min = summary
+            .agriculture_min
+            .min(effect.agriculture_yield_permille);
+        summary.agriculture_max = summary
+            .agriculture_max
+            .max(effect.agriculture_yield_permille);
+        summary.construction_min = summary
+            .construction_min
+            .min(effect.construction_cost_permille);
+        summary.construction_max = summary
+            .construction_max
+            .max(effect.construction_cost_permille);
         summary.movement_min = summary.movement_min.min(effect.movement_cost_permille);
         summary.movement_max = summary.movement_max.max(effect.movement_cost_permille);
         summary.defense_min = summary.defense_min.min(effect.defense_multiplier_permille);
         summary.defense_max = summary.defense_max.max(effect.defense_multiplier_permille);
-        summary.port_candidates += usize::from(effect.port_feasibility_permille > 0);
+        if effect.port_feasibility_permille > 0 {
+            summary.port_candidates += 1;
+        }
         summary.carrying_min = summary
             .carrying_min
             .min(effect.carrying_capacity_people_per_km2);
