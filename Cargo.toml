@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/simulation-model",
+  "crates/simulation-core",
+  "crates/simulation-save",
+  "crates/simulation-runner",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+rust-version = "1.80"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
