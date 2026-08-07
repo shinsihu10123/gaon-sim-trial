@@ -107,7 +107,7 @@ pub struct RegionDraft {
 
 /// Deterministic Region registry.
 ///
-/// The BTreeMap key is the canonical iteration order. Removed IDs are never
+/// The `BTreeMap` key is the canonical iteration order. Removed IDs are never
 /// reused because `next_id` only advances.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionRegistry {
@@ -238,6 +238,11 @@ impl RegionRegistry {
     #[must_use]
     pub fn get_mut(&mut self, id: RegionId) -> Option<&mut RegionState> {
         self.entries.get_mut(&id)
+    }
+
+    #[must_use]
+    pub fn iter(&self) -> std::collections::btree_map::Values<'_, RegionId, RegionState> {
+        self.entries.values()
     }
 
     #[must_use]

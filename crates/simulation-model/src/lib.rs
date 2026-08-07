@@ -200,8 +200,8 @@ impl CommandPayload {
         match self {
             Self::RemoveCountryEntity {
                 country_id: referenced,
-            } => *referenced == country_id,
-            Self::CreateCityEntity {
+            }
+            | Self::CreateCityEntity {
                 country_id: Some(referenced),
                 ..
             } => *referenced == country_id,
@@ -225,11 +225,11 @@ impl CommandPayload {
             Self::CreateCityEntity {
                 region_id: Some(referenced),
                 ..
-            } => *referenced == region_id,
-            Self::CreateRegionEntity { draft } => draft.neighbors.contains(&region_id),
-            Self::RemoveRegionEntity {
+            }
+            | Self::RemoveRegionEntity {
                 region_id: referenced,
             } => *referenced == region_id,
+            Self::CreateRegionEntity { draft } => draft.neighbors.contains(&region_id),
             Self::NoOp { .. }
             | Self::CreateCountryEntity
             | Self::RemoveCountryEntity { .. }
