@@ -6,8 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use simulation_model::{
-    CommandExecutionRecord, CommandId, CommandPriority, CommandSource, EventCategory, EventId,
-    EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
+    CommandExecutionRecord, CommandId, CommandPriority, CommandSource, EntityRegistry,
+    EventCategory, EventId, EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate,
+    WorldState,
 };
 
 /// Stage 2.5 adds dynamic entity registries and stable allocator state.
@@ -328,8 +329,7 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
         ));
     }
 
-    use simulation_model::EntityRegistry as _;
-    for region in world.spatial.regions.iter() {
+    for region in &world.spatial.regions {
         for country in [region.political.legal_owner, region.political.controller]
             .into_iter()
             .flatten()
