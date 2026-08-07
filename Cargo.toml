@@ -5,6 +5,8 @@ members = [
   "crates/simulation-core",
   "crates/simulation-save",
   "crates/simulation-runner",
+  "crates/simulation-protocol",
+  "crates/simulation-wasm",
 ]
 
 [workspace.package]

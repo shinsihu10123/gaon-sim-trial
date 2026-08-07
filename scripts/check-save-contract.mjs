@@ -5,8 +5,12 @@ const binary = readFileSync("crates/simulation-save/src/binary.rs", "utf8");
 const coreLedger = readFileSync("crates/simulation-core/src/event_ledger.rs", "utf8");
 const doc = readFileSync("docs/STAGE_1_5_SAVE_RESTORE.md", "utf8");
 
+const versionMatch = save.match(/pub const SAVE_FORMAT_VERSION: u32 = (\d+)/);
+if (versionMatch === null || Number(versionMatch[1]) < 1) {
+  throw new Error("Stage 1.5 save contract requires a positive versioned save format");
+}
+
 const saveFragments = [
-  "pub const SAVE_FORMAT_VERSION: u32 = 1",
   "pub enum SaveKind",
   "Manual",
   "Autosave",
@@ -25,6 +29,7 @@ const saveFragments = [
 
 const binaryFragments = [
   'const STATE_MAGIC: [u8; 8] = *b"GAONST01"',
+  "SAVE_FORMAT_VERSION",
   "to_le_bytes()",
   "from_le_bytes",
   "pending_commands",
@@ -69,6 +74,6 @@ if (!doc.includes("100-year continuation")) {
   throw new Error("Stage 1.5 documentation must require long-run continuation validation");
 }
 
-console.log("Stage 1.5 save/restore contract verified");
+console.log(`Stage 1.5 save/restore contract verified (format v${versionMatch[1]})`);
 
 await import("./check-determinism-contract.mjs");
