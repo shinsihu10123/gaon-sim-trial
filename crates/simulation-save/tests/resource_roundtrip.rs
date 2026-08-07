@@ -43,8 +43,14 @@ fn extracted_stock_round_trips_exactly_and_changes_canonical_binary() {
     let after = create_bundle(&snapshot, SaveKind::Manual).expect("post-extraction state saves");
     assert_ne!(before.state_binary, after.state_binary);
     assert_ne!(
-        before.metadata().expect("before metadata").state_checksum_fnv1a64,
-        after.metadata().expect("after metadata").state_checksum_fnv1a64
+        before
+            .metadata()
+            .expect("before metadata")
+            .state_checksum_fnv1a64,
+        after
+            .metadata()
+            .expect("after metadata")
+            .state_checksum_fnv1a64
     );
 
     let (_, restored) = decode_bundle(&after).expect("post-extraction state restores");
