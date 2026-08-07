@@ -235,10 +235,7 @@ fn carrying_capacity(sample: &crate::TerrainSample, agriculture: u16, river_orde
     };
     let river_bonus = u16::from(river_order) * 10;
     let altitude_penalty = if sample.elevation_m > 2_000 { 40 } else { 0 };
-    let raw = 10_i32
-        + i32::from(agriculture) / 6
-        + i32::from(coast_bonus)
-        + i32::from(river_bonus)
+    let raw = 10_i32 + i32::from(agriculture) / 6 + i32::from(coast_bonus) + i32::from(river_bonus)
         - altitude_penalty;
     clamp_u16(raw, 5, 280)
 }
