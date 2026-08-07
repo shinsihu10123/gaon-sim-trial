@@ -4,8 +4,8 @@ mod hydrology;
 
 use hydrology::{derive_hydrology, derive_landmasses, ensure_seeded_island};
 use simulation_model::{
-    BiomeClass, ReliefClass, TerrainError, TerrainSample, TerrainState, TERRAIN_GRID_SIDE,
-    TERRAIN_SAMPLE_COUNT,
+    BiomeClass, ReliefClass, TerrainError, TerrainHydrology, TerrainLandmasses, TerrainSample,
+    TerrainState, TERRAIN_GRID_SIDE, TERRAIN_SAMPLE_COUNT,
 };
 
 const CONTINENTAL_SALT_1: u64 = 0x434f_4e54_0000_0001;
@@ -82,9 +82,6 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
     let _ = ensure_seeded_island(&mut elevations, side, seed);
     limit_neighbor_elevation_delta(&mut elevations, side);
 
-    let hydrology = derive_hydrology(&elevations, side);
-    let landmasses = derive_landmasses(&elevations, side);
-
     let mut samples = Vec::with_capacity(TERRAIN_SAMPLE_COUNT);
     for index in 0..TERRAIN_SAMPLE_COUNT {
         let elevation = elevations[index];
@@ -100,7 +97,31 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
         });
     }
 
-    TerrainState::new_trial(samples)?.with_derived_geography(hydrology, landmasses)
+    TerrainState::new_trial(samples)
+}
+
+/// Derives deterministic downstream routing, drainage basins and river order
+/// from the canonical terrain heightfield.
+#[must_use]
+pub fn derive_trial_hydrology(terrain: &TerrainState) -> TerrainHydrology {
+    let elevations = terrain
+        .samples
+        .iter()
+        .map(|sample| sample.elevation_m)
+        .collect::<Vec<_>>();
+    derive_hydrology(&elevations, usize::from(terrain.width))
+}
+
+/// Derives deterministic connected landmasses and island identifiers from the
+/// canonical terrain heightfield.
+#[must_use]
+pub fn derive_trial_landmasses(terrain: &TerrainState) -> TerrainLandmasses {
+    let elevations = terrain
+        .samples
+        .iter()
+        .map(|sample| sample.elevation_m)
+        .collect::<Vec<_>>();
+    derive_landmasses(&elevations, usize::from(terrain.width))
 }
 
 fn limit_neighbor_elevation_delta(elevations: &mut [i16], side: usize) {
@@ -289,13 +310,18 @@ mod tests {
 
     use simulation_model::{BiomeClass, ReliefClass, TERRAIN_GRID_SIDE, TERRAIN_SAMPLE_COUNT};
 
-    use super::{generate_trial_terrain, MAX_NEIGHBOR_ELEVATION_DELTA_M};
+    use super::{
+        derive_trial_hydrology, derive_trial_landmasses, generate_trial_terrain,
+        MAX_NEIGHBOR_ELEVATION_DELTA_M,
+    };
 
     #[test]
     fn same_seed_generates_identical_terrain() {
         let first = generate_trial_terrain(2026).expect("terrain should generate");
         let second = generate_trial_terrain(2026).expect("terrain should generate");
         assert_eq!(first, second);
+        assert_eq!(derive_trial_hydrology(&first), derive_trial_hydrology(&second));
+        assert_eq!(derive_trial_landmasses(&first), derive_trial_landmasses(&second));
     }
 
     #[test]
@@ -381,14 +407,14 @@ mod tests {
     }
 
     #[test]
-    fn generated_world_has_authoritative_rivers_basins_and_islands() {
+    fn generated_world_has_deterministic_rivers_basins_and_islands() {
         for seed in [1, 2026, 2027, u64::MAX] {
             let terrain = generate_trial_terrain(seed).expect("terrain should generate");
-            let hydrology = terrain.hydrology.as_ref().expect("hydrology required");
-            let landmasses = terrain.landmasses.as_ref().expect("landmasses required");
-            assert!(terrain.river_sample_count() > 0);
+            let hydrology = derive_trial_hydrology(&terrain);
+            let landmasses = derive_trial_landmasses(&terrain);
+            assert!(hydrology.river_orders.iter().any(|&order| order > 0));
             assert!(hydrology.drainage_basin_ids.iter().any(|&id| id > 0));
-            assert!(terrain.island_count() > 0);
+            assert!(!landmasses.island_landmass_ids.is_empty());
             assert!(landmasses.landmass_ids.iter().copied().max().unwrap_or(0) >= 2);
         }
     }
