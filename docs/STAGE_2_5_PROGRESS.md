@@ -35,7 +35,8 @@ Current integration gate:
 - lifecycle facts are represented in Event Ledger payloads
 - RenderSnapshot crosses the JS boundary with decimal-string entity IDs
 - rustfmt and model-level strict Clippy findings are resolved
-- Save validation now recognizes System command attribution explicitly
+- Save validation recognizes System command attribution
+- Save registry iteration/import findings are corrected
 - permanent Core/Viewer CI is proceeding into binary codec, tests and headless replay validation
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
