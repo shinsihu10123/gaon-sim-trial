@@ -75,12 +75,10 @@ fn mix64(mut value: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use simulation_model::TerrainState;
-
     use super::ensure_seeded_island;
 
     #[test]
-    fn seeded_island_creates_secondary_landmass() {
+    fn seeded_island_creates_land_outside_existing_mainland() {
         let side = 25;
         let mut elevations = vec![-500_i16; side * side];
         for z in 10..=14 {
@@ -90,11 +88,11 @@ mod tests {
         }
         assert!(ensure_seeded_island(&mut elevations, side, 7));
 
-        let _type_anchor: Option<TerrainState> = None;
-        let land_count = elevations
-            .iter()
-            .filter(|&&elevation| elevation >= 0)
-            .count();
-        assert!(land_count > 25);
+        let separate_land_exists = elevations.iter().enumerate().any(|(index, &elevation)| {
+            let x = index % side;
+            let z = index / side;
+            elevation >= 0 && !(10..=14).contains(&x) && !(10..=14).contains(&z)
+        });
+        assert!(separate_land_exists);
     }
 }
