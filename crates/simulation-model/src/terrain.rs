@@ -7,14 +7,13 @@ pub const TRIAL_WORLD_HALF_EXTENT_M: i32 = 640_000;
 pub const TERRAIN_SEA_LEVEL_M: i16 = 0;
 
 #[must_use]
-pub fn trial_terrain_bounds() -> WorldBounds {
-    WorldBounds::new(
-        -TRIAL_WORLD_HALF_EXTENT_M,
-        TRIAL_WORLD_HALF_EXTENT_M,
-        -TRIAL_WORLD_HALF_EXTENT_M,
-        TRIAL_WORLD_HALF_EXTENT_M,
-    )
-    .expect("fixed trial terrain bounds are valid")
+pub const fn trial_terrain_bounds() -> WorldBounds {
+    WorldBounds {
+        min_x_m: -TRIAL_WORLD_HALF_EXTENT_M,
+        max_x_m: TRIAL_WORLD_HALF_EXTENT_M,
+        min_z_m: -TRIAL_WORLD_HALF_EXTENT_M,
+        max_z_m: TRIAL_WORLD_HALF_EXTENT_M,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
