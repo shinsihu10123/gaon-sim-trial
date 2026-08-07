@@ -240,7 +240,6 @@ impl RegionRegistry {
         self.entries.get_mut(&id)
     }
 
-    #[must_use]
     pub fn iter(&self) -> std::collections::btree_map::Values<'_, RegionId, RegionState> {
         self.entries.values()
     }
@@ -404,7 +403,7 @@ impl WorldSpatialState {
             return Err(WorldSpatialError::PartialInitialization);
         }
 
-        for region in self.regions.iter() {
+        for region in &self.regions {
             validate_region_state(bounds, region)?;
             for &neighbor in &region.neighbors {
                 if neighbor == region.id {
