@@ -1,7 +1,8 @@
 use simulation_model::{
     CommandExecutionRecord, CommandId, CommandPayload, CommandPriority, CommandSource, CountryId,
-    EventCategory, EventId, EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate,
-    WorldState,
+    EventCategory, EventId, EventPayload, EventRecord, EventSource, MapPoint, QueuedCommand,
+    RegionId, RegionPoliticalState, RegionState, RegionSurface, SimulationDate, WorldBounds,
+    WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -13,7 +14,7 @@ pub(crate) fn encode_snapshot(snapshot: &EngineSnapshot) -> Result<Vec<u8>, Save
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&STATE_MAGIC);
     write_u32(&mut bytes, SAVE_FORMAT_VERSION);
-    write_world(&mut bytes, &snapshot.world);
+    write_world(&mut bytes, &snapshot.world)?;
     write_u64(&mut bytes, snapshot.next_command_id);
     write_u64(&mut bytes, snapshot.next_event_id);
 
@@ -91,21 +92,169 @@ pub(crate) fn decode_snapshot(bytes: &[u8]) -> Result<EngineSnapshot, SaveError>
     })
 }
 
-fn write_world(bytes: &mut Vec<u8>, world: &WorldState) {
+fn write_world(bytes: &mut Vec<u8>, world: &WorldState) -> Result<(), SaveError> {
     write_date(bytes, world.date);
     write_u64(bytes, world.elapsed_days);
     write_u64(bytes, world.seed);
+
+    match world.spatial.bounds {
+        None => write_u8(bytes, 0),
+        Some(bounds) => {
+            write_u8(bytes, 1);
+            write_i32(bytes, bounds.min_x_m);
+            write_i32(bytes, bounds.max_x_m);
+            write_i32(bytes, bounds.min_z_m);
+            write_i32(bytes, bounds.max_z_m);
+            write_count(bytes, "regions", world.spatial.regions.len())?;
+            for region in &world.spatial.regions {
+                write_region(bytes, region)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
     let date = read_date(cursor)?;
     let elapsed_days = cursor.read_u64()?;
     let seed = cursor.read_u64()?;
+    let spatial = match cursor.read_u8()? {
+        0 => WorldSpatialState::uninitialized(),
+        1 => {
+            let bounds = WorldBounds::new(
+                cursor.read_i32()?,
+                cursor.read_i32()?,
+                cursor.read_i32()?,
+                cursor.read_i32()?,
+            )
+            .map_err(|_| SaveError::InvalidBinary("invalid world bounds"))?;
+            let region_count = cursor.read_count("regions")?;
+            let mut regions = Vec::with_capacity(region_count);
+            for _ in 0..region_count {
+                regions.push(read_region(cursor)?);
+            }
+            WorldSpatialState::new_trial(bounds, regions)
+                .map_err(|_| SaveError::InvalidBinary("invalid world spatial state"))?
+        }
+        tag => {
+            return Err(SaveError::InvalidTag {
+                field: "world spatial state",
+                tag,
+            });
+        }
+    };
+
     Ok(WorldState {
         date,
         elapsed_days,
         seed,
+        spatial,
     })
+}
+
+fn write_region(bytes: &mut Vec<u8>, region: &RegionState) -> Result<(), SaveError> {
+    write_u16(bytes, region.id.0);
+    write_region_surface(bytes, region.surface);
+    write_point(bytes, region.center);
+
+    write_count(bytes, "region_boundary_points", region.boundary.len())?;
+    for &point in &region.boundary {
+        write_point(bytes, point);
+    }
+
+    write_count(bytes, "region_neighbors", region.neighbors.len())?;
+    for &neighbor in &region.neighbors {
+        write_u16(bytes, neighbor.0);
+    }
+
+    write_optional_country(bytes, region.political.legal_owner);
+    write_optional_country(bytes, region.political.controller);
+    Ok(())
+}
+
+fn read_region(cursor: &mut Cursor<'_>) -> Result<RegionState, SaveError> {
+    let id = RegionId(cursor.read_u16()?);
+    let surface = read_region_surface(cursor)?;
+    let center = read_point(cursor)?;
+
+    let boundary_count = cursor.read_count("region_boundary_points")?;
+    let mut boundary = Vec::with_capacity(boundary_count);
+    for _ in 0..boundary_count {
+        boundary.push(read_point(cursor)?);
+    }
+
+    let neighbor_count = cursor.read_count("region_neighbors")?;
+    let mut neighbors = Vec::with_capacity(neighbor_count);
+    for _ in 0..neighbor_count {
+        neighbors.push(RegionId(cursor.read_u16()?));
+    }
+
+    let legal_owner = read_optional_country(cursor)?;
+    let controller = read_optional_country(cursor)?;
+
+    Ok(RegionState {
+        id,
+        surface,
+        center,
+        boundary,
+        neighbors,
+        political: RegionPoliticalState {
+            legal_owner,
+            controller,
+        },
+    })
+}
+
+fn write_region_surface(bytes: &mut Vec<u8>, surface: RegionSurface) {
+    write_u8(
+        bytes,
+        match surface {
+            RegionSurface::Land => 0,
+            RegionSurface::Ocean => 1,
+        },
+    );
+}
+
+fn read_region_surface(cursor: &mut Cursor<'_>) -> Result<RegionSurface, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(RegionSurface::Land),
+        1 => Ok(RegionSurface::Ocean),
+        tag => Err(SaveError::InvalidTag {
+            field: "region surface",
+            tag,
+        }),
+    }
+}
+
+fn write_point(bytes: &mut Vec<u8>, point: MapPoint) {
+    write_i32(bytes, point.x_m);
+    write_i32(bytes, point.z_m);
+}
+
+fn read_point(cursor: &mut Cursor<'_>) -> Result<MapPoint, SaveError> {
+    Ok(MapPoint::new(cursor.read_i32()?, cursor.read_i32()?))
+}
+
+fn write_optional_country(bytes: &mut Vec<u8>, country: Option<CountryId>) {
+    match country {
+        None => write_u8(bytes, 0),
+        Some(country) => {
+            write_u8(bytes, 1);
+            write_u16(bytes, country.0);
+        }
+    }
+}
+
+fn read_optional_country(cursor: &mut Cursor<'_>) -> Result<Option<CountryId>, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(None),
+        1 => Ok(Some(CountryId(cursor.read_u16()?))),
+        tag => Err(SaveError::InvalidTag {
+            field: "optional country",
+            tag,
+        }),
+    }
 }
 
 fn write_queued_command(bytes: &mut Vec<u8>, command: &QueuedCommand) {
@@ -334,6 +483,10 @@ fn write_u64(bytes: &mut Vec<u8>, value: u64) {
     bytes.extend_from_slice(&value.to_le_bytes());
 }
 
+fn write_i32(bytes: &mut Vec<u8>, value: i32) {
+    bytes.extend_from_slice(&value.to_le_bytes());
+}
+
 struct Cursor<'a> {
     bytes: &'a [u8],
     position: usize,
@@ -372,6 +525,10 @@ impl<'a> Cursor<'a> {
         Ok(u64::from_le_bytes(self.read_array::<8>()?))
     }
 
+    fn read_i32(&mut self) -> Result<i32, SaveError> {
+        Ok(i32::from_le_bytes(self.read_array::<4>()?))
+    }
+
     fn read_array<const N: usize>(&mut self) -> Result<[u8; N], SaveError> {
         let end = self
             .position
@@ -390,24 +547,74 @@ impl<'a> Cursor<'a> {
 
 #[cfg(test)]
 mod tests {
-    use simulation_model::WorldState;
+    use simulation_model::{
+        MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldBounds,
+        WorldSpatialState, WorldState, TRIAL_REGION_COUNT,
+    };
 
     use super::{decode_snapshot, encode_snapshot};
     use crate::EngineSnapshot;
 
-    #[test]
-    fn empty_snapshot_binary_round_trip_is_exact() {
-        let snapshot = EngineSnapshot {
-            world: WorldState::new(77),
+    fn trial_spatial() -> WorldSpatialState {
+        let regions = (1..=TRIAL_REGION_COUNT)
+            .map(|index| {
+                let id = RegionId(u16::try_from(index).expect("id fits u16"));
+                let x = i32::try_from(index).expect("index fits i32") * 100;
+                let mut neighbors = Vec::new();
+                if index > 1 {
+                    neighbors.push(RegionId(u16::try_from(index - 1).expect("id fits u16")));
+                }
+                if index < TRIAL_REGION_COUNT {
+                    neighbors.push(RegionId(u16::try_from(index + 1).expect("id fits u16")));
+                }
+                RegionState {
+                    id,
+                    surface: RegionSurface::Land,
+                    center: MapPoint::new(x, 100),
+                    boundary: vec![
+                        MapPoint::new(x - 20, 80),
+                        MapPoint::new(x + 20, 80),
+                        MapPoint::new(x, 120),
+                    ],
+                    neighbors,
+                    political: RegionPoliticalState::unclaimed(),
+                }
+            })
+            .collect();
+        WorldSpatialState::new_trial(
+            WorldBounds::new(0, 10_000, 0, 10_000).expect("valid bounds"),
+            regions,
+        )
+        .expect("valid trial spatial state")
+    }
+
+    fn empty_snapshot(world: WorldState) -> EngineSnapshot {
+        EngineSnapshot {
+            world,
             pending_commands: Vec::new(),
             executed_commands: Vec::new(),
             events: Vec::new(),
             next_command_id: 1,
             next_event_id: 1,
-        };
+        }
+    }
 
+    #[test]
+    fn empty_snapshot_binary_round_trip_is_exact() {
+        let snapshot = empty_snapshot(WorldState::new(77));
         let encoded = encode_snapshot(&snapshot).expect("snapshot should encode");
         let decoded = decode_snapshot(&encoded).expect("snapshot should decode");
         assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn initialized_sixty_region_world_round_trip_is_exact() {
+        let mut world = WorldState::new(77);
+        world.spatial = trial_spatial();
+        let snapshot = empty_snapshot(world);
+        let encoded = encode_snapshot(&snapshot).expect("snapshot should encode");
+        let decoded = decode_snapshot(&encoded).expect("snapshot should decode");
+        assert_eq!(decoded, snapshot);
+        assert_eq!(decoded.world.spatial.regions.len(), 60);
     }
 }
