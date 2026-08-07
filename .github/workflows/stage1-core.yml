@@ -20,13 +20,11 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Show resolved Cargo.lock
-        run: cat Cargo.lock
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
       - name: Run headless trial
-        run: cargo run -p simulation-runner --quiet
+        run: cargo run --locked -p simulation-runner --quiet
 
   command-contract:
     runs-on: ubuntu-latest
