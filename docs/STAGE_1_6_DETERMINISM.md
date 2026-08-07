@@ -67,6 +67,12 @@ Commands accepted on the target state's current date but not yet followed by a d
 
 Malformed journals fail replay rather than being silently normalized. Examples include non-contiguous command IDs, impossible submission dates or commands that cannot be re-accepted under the recorded execution date.
 
+## Dependency locking
+
+Reproducibility also requires dependency resolution to remain stable for a given source revision. Stage 1.6 therefore requires the workspace `Cargo.lock` produced by the validated CI dependency resolution to be committed to the repository.
+
+After the lockfile is committed, CI must build and test with `--locked`. A source revision whose manifest and lockfile disagree is considered invalid rather than silently resolving a different dependency graph.
+
 ## Required validation
 
 Stage 1.6 must verify all of the following:
@@ -80,7 +86,8 @@ Stage 1.6 must verify all of the following:
 7. a command journal reconstructs the exact authoritative snapshot;
 8. a **10,000-tick replay** reconstructs the exact snapshot and digest;
 9. repeated same-seed/same-journal runs remain identical;
-10. renderer sampling never becomes part of authoritative state.
+10. renderer sampling never becomes part of authoritative state;
+11. the repository contains the validated `Cargo.lock` and CI uses locked dependency resolution.
 
 ## State ownership
 
