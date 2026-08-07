@@ -10,10 +10,9 @@ use simulation_model::{
     EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
 };
 
-pub const SAVE_FORMAT_VERSION: u32 = 1;
+/// Stage 2.1 adds canonical world topology to authoritative state.
+pub const SAVE_FORMAT_VERSION: u32 = 2;
 
-/// Identifies why a snapshot was persisted. Manual and autosave snapshots use
-/// the exact same state format and validation path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveKind {
@@ -21,7 +20,6 @@ pub enum SaveKind {
     Autosave,
 }
 
-/// Human-readable JSON metadata stored beside the canonical binary state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveMetadata {
     pub format_version: u32,
@@ -30,15 +28,11 @@ pub struct SaveMetadata {
     pub simulation_month: u8,
     pub simulation_day: u8,
     pub elapsed_days: u64,
-    /// Hex encoding avoids JavaScript number precision loss in the future UI.
     pub seed_hex: String,
     pub state_bytes: u64,
-    /// FNV-1a integrity checksum. This detects accidental corruption; it is not
-    /// intended as a cryptographic authenticity mechanism.
     pub state_checksum_fnv1a64: String,
 }
 
-/// Complete authoritative Stage 1 simulation state required for exact resume.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineSnapshot {
     pub world: WorldState,
@@ -49,8 +43,6 @@ pub struct EngineSnapshot {
     pub next_event_id: u64,
 }
 
-/// Portable save payload. A browser adapter can persist the JSON and binary
-/// members separately without changing the deterministic core format.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveBundle {
     pub metadata_json: String,
@@ -58,10 +50,7 @@ pub struct SaveBundle {
 }
 
 impl SaveBundle {
-    /// Parses metadata without decoding the binary engine state.
-    ///
     /// # Errors
-    ///
     /// Returns [`SaveError::MetadataDecode`] for malformed JSON.
     pub fn metadata(&self) -> Result<SaveMetadata, SaveError> {
         serde_json::from_str(&self.metadata_json)
@@ -69,20 +58,14 @@ impl SaveBundle {
     }
 }
 
-/// Deterministic autosave cadence helper. The caller owns the last successful
-/// autosave day so failed writes never advance the schedule accidentally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutosavePolicy {
     interval_days: u64,
 }
 
 impl AutosavePolicy {
-    /// Creates an autosave policy measured in simulated days.
-    ///
     /// # Errors
-    ///
-    /// Returns [`SaveError::InvalidAutosaveInterval`] when `interval_days` is
-    /// zero.
+    /// Returns [`SaveError::InvalidAutosaveInterval`] when `interval_days` is zero.
     pub const fn new(interval_days: u64) -> Result<Self, SaveError> {
         if interval_days == 0 {
             return Err(SaveError::InvalidAutosaveInterval);
@@ -143,21 +126,15 @@ impl core::fmt::Display for SaveError {
             ),
             Self::TruncatedBinary => formatter.write_str("binary state is truncated"),
             Self::TrailingBinaryData => formatter.write_str("binary state contains trailing data"),
-            Self::InvalidTag { field, tag } => {
-                write!(formatter, "invalid {field} tag {tag}")
-            }
-            Self::RecordCountOverflow { section } => {
-                write!(
-                    formatter,
-                    "{section} count cannot be represented by save format"
-                )
-            }
-            Self::RecordLimitExceeded { section, count } => {
-                write!(
-                    formatter,
-                    "{section} record count {count} exceeds safety limit"
-                )
-            }
+            Self::InvalidTag { field, tag } => write!(formatter, "invalid {field} tag {tag}"),
+            Self::RecordCountOverflow { section } => write!(
+                formatter,
+                "{section} count cannot be represented by save format"
+            ),
+            Self::RecordLimitExceeded { section, count } => write!(
+                formatter,
+                "{section} record count {count} exceeds safety limit"
+            ),
             Self::SnapshotInvariant(message) => {
                 write!(formatter, "snapshot invariant failed: {message}")
             }
@@ -170,13 +147,8 @@ impl core::fmt::Display for SaveError {
 
 impl std::error::Error for SaveError {}
 
-/// Encodes a validated authoritative engine snapshot into JSON metadata and
-/// canonical binary state.
-///
 /// # Errors
-///
-/// Returns [`SaveError`] when snapshot invariants fail, counts cannot be
-/// represented, or metadata serialization fails.
+/// Returns [`SaveError`] when snapshot invariants or serialization fail.
 pub fn create_bundle(snapshot: &EngineSnapshot, kind: SaveKind) -> Result<SaveBundle, SaveError> {
     validate_snapshot(snapshot)?;
     let state_binary = binary::encode_snapshot(snapshot)?;
@@ -198,17 +170,13 @@ pub fn create_bundle(snapshot: &EngineSnapshot, kind: SaveKind) -> Result<SaveBu
 
     let metadata_json = serde_json::to_string_pretty(&metadata)
         .map_err(|error| SaveError::MetadataEncode(error.to_string()))?;
-
     Ok(SaveBundle {
         metadata_json,
         state_binary,
     })
 }
 
-/// Validates and decodes a save bundle into an authoritative engine snapshot.
-///
 /// # Errors
-///
 /// Returns [`SaveError`] for malformed metadata, unsupported versions,
 /// corruption, structural violations, or metadata/state disagreement.
 pub fn decode_bundle(bundle: &SaveBundle) -> Result<(SaveKind, EngineSnapshot), SaveError> {
@@ -242,16 +210,11 @@ pub fn decode_bundle(bundle: &SaveBundle) -> Result<(SaveKind, EngineSnapshot), 
     let snapshot = binary::decode_snapshot(&bundle.state_binary)?;
     validate_snapshot(&snapshot)?;
     validate_metadata_matches_snapshot(&metadata, &snapshot)?;
-
     Ok((metadata.save_kind, snapshot))
 }
 
-/// Verifies all cross-record invariants required for exact deterministic resume.
-///
 /// # Errors
-///
-/// Returns [`SaveError::SnapshotInvariant`] when authoritative state is
-/// internally inconsistent.
+/// Returns [`SaveError::SnapshotInvariant`] when authoritative state is inconsistent.
 pub fn validate_snapshot(snapshot: &EngineSnapshot) -> Result<(), SaveError> {
     validate_world(&snapshot.world)?;
 
@@ -332,6 +295,12 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
             "world date and elapsed day counter disagree",
         ));
     }
+
+    if world.spatial.validate().is_err() {
+        return Err(SaveError::SnapshotInvariant(
+            "world spatial state violates Stage 2.1 topology invariants",
+        ));
+    }
     Ok(())
 }
 
@@ -340,9 +309,7 @@ fn validate_command(command: &QueuedCommand, world: &WorldState) -> Result<(), S
         return Err(SaveError::SnapshotInvariant("command id must be nonzero"));
     }
     if !command.submitted_on.is_valid() || !command.execute_on.is_valid() {
-        return Err(SaveError::SnapshotInvariant(
-            "command contains invalid date",
-        ));
+        return Err(SaveError::SnapshotInvariant("command contains invalid date"));
     }
     if command.submitted_on > world.date {
         return Err(SaveError::SnapshotInvariant(
@@ -415,12 +382,11 @@ fn validate_events(
 
         match event.payload {
             EventPayload::CommandExecuted { command_id } => {
-                let source =
-                    executed_sources
-                        .get(&command_id)
-                        .ok_or(SaveError::SnapshotInvariant(
-                            "command-executed event references unknown executed command",
-                        ))?;
+                let source = executed_sources.get(&command_id).ok_or(
+                    SaveError::SnapshotInvariant(
+                        "command-executed event references unknown executed command",
+                    ),
+                )?;
                 if !command_event_ids.insert(command_id) {
                     return Err(SaveError::SnapshotInvariant(
                         "executed command has duplicate execution events",
@@ -442,7 +408,6 @@ fn validate_events(
             "next event id does not follow append-only event history",
         ));
     }
-
     Ok(())
 }
 
@@ -539,14 +504,11 @@ mod tests {
     #[test]
     fn metadata_and_binary_round_trip_exactly() {
         let snapshot = empty_snapshot(0xfedc_ba98_7654_3210);
-        let bundle =
-            create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
+        let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
         let metadata = bundle.metadata().expect("metadata should parse");
-
         assert_eq!(metadata.format_version, SAVE_FORMAT_VERSION);
         assert_eq!(metadata.save_kind, SaveKind::Manual);
         assert_eq!(metadata.seed_hex, "fedcba9876543210");
-
         let (kind, decoded) = decode_bundle(&bundle).expect("bundle should restore");
         assert_eq!(kind, SaveKind::Manual);
         assert_eq!(decoded, snapshot);
@@ -555,14 +517,9 @@ mod tests {
     #[test]
     fn binary_corruption_is_rejected_by_checksum() {
         let snapshot = empty_snapshot(7);
-        let mut bundle =
-            create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
-        let last = bundle
-            .state_binary
-            .last_mut()
-            .expect("binary snapshot is nonempty");
+        let mut bundle = create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot");
+        let last = bundle.state_binary.last_mut().expect("binary nonempty");
         *last ^= 0x80;
-
         assert!(matches!(
             decode_bundle(&bundle),
             Err(SaveError::ChecksumMismatch { .. })
@@ -572,14 +529,11 @@ mod tests {
     #[test]
     fn unsupported_metadata_version_is_rejected_before_state_decode() {
         let snapshot = empty_snapshot(7);
-        let mut bundle =
-            create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
+        let mut bundle = create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot");
         let mut metadata: serde_json::Value =
-            serde_json::from_str(&bundle.metadata_json).expect("metadata should parse");
+            serde_json::from_str(&bundle.metadata_json).expect("metadata parse");
         metadata["format_version"] = serde_json::Value::from(999_u64);
-        bundle.metadata_json =
-            serde_json::to_string_pretty(&metadata).expect("metadata should encode");
-
+        bundle.metadata_json = serde_json::to_string_pretty(&metadata).expect("metadata encode");
         assert_eq!(
             decode_bundle(&bundle),
             Err(SaveError::UnsupportedMetadataVersion { found: 999 })
@@ -588,11 +542,8 @@ mod tests {
 
     #[test]
     fn autosave_policy_requires_positive_interval_and_tracks_successful_save_day() {
-        assert_eq!(
-            AutosavePolicy::new(0),
-            Err(SaveError::InvalidAutosaveInterval)
-        );
-        let policy = AutosavePolicy::new(30).expect("positive interval should be valid");
+        assert_eq!(AutosavePolicy::new(0), Err(SaveError::InvalidAutosaveInterval));
+        let policy = AutosavePolicy::new(30).expect("positive interval valid");
         assert!(!policy.is_due(29, None));
         assert!(policy.is_due(30, None));
         assert!(!policy.is_due(59, Some(30)));
@@ -603,6 +554,18 @@ mod tests {
     fn inconsistent_next_id_is_rejected() {
         let mut snapshot = empty_snapshot(7);
         snapshot.next_command_id = 2;
+        assert!(matches!(
+            create_bundle(&snapshot, SaveKind::Manual),
+            Err(SaveError::SnapshotInvariant(_))
+        ));
+    }
+
+    #[test]
+    fn partially_initialized_spatial_state_is_rejected() {
+        let mut snapshot = empty_snapshot(7);
+        snapshot.world.spatial.bounds = Some(
+            simulation_model::WorldBounds::new(0, 100, 0, 100).expect("valid bounds"),
+        );
         assert!(matches!(
             create_bundle(&snapshot, SaveKind::Manual),
             Err(SaveError::SnapshotInvariant(_))
