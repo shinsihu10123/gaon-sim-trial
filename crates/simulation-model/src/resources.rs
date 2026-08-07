@@ -334,8 +334,8 @@ impl ResourceError {
             Self::InvalidQuality(_) => ResourceErrorKind::InvalidQuality,
             Self::InvalidAccessibility(_) => ResourceErrorKind::InvalidAccessibility,
             Self::RemainingExceedsInitial => ResourceErrorKind::RemainingExceedsInitial,
-            Self::InvalidEmptyDeposit => ResourceErrorKind::InvalidEmptyDeposit,
-            Self::WrongCellCount { .. }
+            Self::InvalidEmptyDeposit
+            | Self::WrongCellCount { .. }
             | Self::InvalidCell { .. }
             | Self::OceanContainsLandResources { .. } => ResourceErrorKind::InvalidEmptyDeposit,
         }
