@@ -26,12 +26,12 @@ Status: **IN PROGRESS**
 - canonical digest includes resource stocks through authoritative binary serialization
 - extraction-state round-trip regression added
 - Cargo lockfile refreshed and committed for the new workspace dev-dependency edge
-- strict Clippy duplicate-match correction in progress
+- strict Clippy model warnings corrected
+- resource quality intermediate-width overflow correction in progress
 
 ## Remaining before PASS
 
-- strict Clippy / locked Rust tests
-- representative-seed balance tests
+- locked Rust tests and representative-seed balance validation
 - headless save/load/replay validation
 - permanent source-contract validation
 - final evidence and PR merge
