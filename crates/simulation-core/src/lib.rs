@@ -1,11 +1,14 @@
 #![forbid(unsafe_code)]
 
+mod event_ledger;
+
 use std::time::Duration;
 
+use event_ledger::{EventDraft, EventLedger};
 use simulation_model::{
     CommandError, CommandExecutionRecord, CommandId, CommandPayload, CommandPriority,
-    CommandRequest, CommandTiming, CountryId, DateBoundary, QueuedCommand, SimulationDate,
-    WorldState,
+    CommandRequest, CommandSource, CommandTiming, CountryId, DateBoundary, EventCategory,
+    EventFilter, EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
 };
 
 const NANOS_PER_SECOND: u128 = 1_000_000_000;
@@ -55,12 +58,14 @@ impl SimulationSpeed {
 pub struct TickReport {
     pub boundary: DateBoundary,
     pub commands_executed: u64,
+    pub events_emitted: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct AdvanceReport {
     pub ticks_executed: u64,
     pub commands_executed: u64,
+    pub events_emitted: u64,
     pub month_boundaries: u64,
     pub quarter_boundaries: u64,
     pub year_boundaries: u64,
@@ -70,6 +75,7 @@ pub struct AdvanceReport {
 impl AdvanceReport {
     fn observe_tick(&mut self, tick: TickReport) {
         self.commands_executed += tick.commands_executed;
+        self.events_emitted += tick.events_emitted;
         self.month_boundaries += u64::from(tick.boundary.month_changed);
         self.quarter_boundaries += u64::from(tick.boundary.quarter_changed);
         self.year_boundaries += u64::from(tick.boundary.year_changed);
@@ -78,14 +84,15 @@ impl AdvanceReport {
 
 /// Deterministic fixed-tick simulation kernel.
 ///
-/// The engine is the sole owner of the authoritative command queue and command
-/// execution log. UI and future country AI layers submit requests; only the
-/// engine resolves dates, assigns identifiers and executes accepted commands.
+/// The engine is the sole owner of authoritative simulation state, the command
+/// queue, command execution history and Event Ledger. UI and future country AI
+/// layers submit requests; only the engine resolves and applies them.
 #[derive(Debug, Clone)]
 pub struct SimulationEngine {
     state: WorldState,
     pending_commands: Vec<QueuedCommand>,
     executed_commands: Vec<CommandExecutionRecord>,
+    event_ledger: EventLedger,
     next_command_id: u64,
 }
 
@@ -96,6 +103,7 @@ impl SimulationEngine {
             state: WorldState::new(seed),
             pending_commands: Vec::new(),
             executed_commands: Vec::new(),
+            event_ledger: EventLedger::new(),
             next_command_id: 1,
         }
     }
@@ -113,6 +121,20 @@ impl SimulationEngine {
     #[must_use]
     pub fn command_log(&self) -> &[CommandExecutionRecord] {
         &self.executed_commands
+    }
+
+    /// Returns the complete immutable Event Ledger in canonical append order.
+    #[must_use]
+    pub fn event_log(&self) -> &[EventRecord] {
+        self.event_ledger.records()
+    }
+
+    /// Filters immutable Event Ledger records without mutating simulation state.
+    pub fn query_events(&self, filter: EventFilter) -> impl Iterator<Item = &EventRecord> {
+        self.event_ledger
+            .records()
+            .iter()
+            .filter(move |event| filter.matches(event))
     }
 
     /// Accepts a command request after deterministic validation and assigns its
@@ -216,6 +238,9 @@ impl SimulationEngine {
     }
 
     fn execute_command(&mut self, command: QueuedCommand, executed_on: SimulationDate) {
+        let command_id = command.id;
+        let command_source = command.source;
+
         match &command.payload {
             CommandPayload::NoOp { .. } => {}
         }
@@ -224,6 +249,23 @@ impl SimulationEngine {
             command,
             executed_on,
         });
+
+        let (category, source) = match command_source {
+            CommandSource::User => (EventCategory::UserIntervention, EventSource::User),
+            CommandSource::CountryAi(country_id) => {
+                (EventCategory::System, EventSource::Country(country_id))
+            }
+        };
+
+        self.event_ledger.append(
+            executed_on,
+            self.state.elapsed_days,
+            EventDraft {
+                category,
+                source,
+                payload: EventPayload::CommandExecuted { command_id },
+            },
+        );
     }
 
     /// Advances exactly one simulated day.
@@ -234,12 +276,21 @@ impl SimulationEngine {
     /// interventions deterministic: an immediate command means "effective on
     /// the current simulated date at the next daily tick".
     pub fn tick(&mut self) -> TickReport {
+        let events_before = self.event_ledger.records().len();
         let commands_executed = self.execute_due_commands();
+        let events_emitted = self
+            .event_ledger
+            .records()
+            .len()
+            .saturating_sub(events_before);
+        let events_emitted = u64::try_from(events_emitted).unwrap_or(u64::MAX);
+
         let boundary = self.state.date.advance_one_day();
         self.state.elapsed_days += 1;
         TickReport {
             boundary,
             commands_executed,
+            events_emitted,
         }
     }
 
@@ -269,7 +320,7 @@ impl SimulationEngine {
 
     /// Returns a deterministic FNV-1a digest of the current minimal world
     /// state. Stage 1.6 will extend canonical hashing to all authoritative
-    /// dynamic state and command/replay positions.
+    /// dynamic state and command/event/replay positions.
     #[must_use]
     pub fn state_digest(&self) -> u64 {
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -353,7 +404,8 @@ mod tests {
     use std::time::Duration;
 
     use simulation_model::{
-        CommandError, CommandPayload, CommandSource, CommandTiming, CountryId, SimulationDate,
+        CommandError, CommandPayload, CommandSource, CommandTiming, CountryId, EventCategory,
+        EventFilter, EventPayload, EventSource, SimulationDate,
     };
 
     use super::{SimulationClock, SimulationEngine, SimulationSpeed};
@@ -554,7 +606,80 @@ mod tests {
     }
 
     #[test]
-    fn command_execution_order_is_identical_at_manual_and_high_speed_playback() {
+    fn command_execution_creates_immutable_user_intervention_event() {
+        let mut engine = SimulationEngine::new(1);
+        let command_id = engine
+            .submit_user_command(CommandTiming::Immediate, CommandPayload::NoOp { token: 50 })
+            .expect("valid user command");
+
+        let report = engine.step_one_day();
+        assert_eq!(report.events_emitted, 1);
+        assert_eq!(engine.event_log().len(), 1);
+
+        let event = engine.event_log()[0];
+        assert_eq!(event.occurred_on, SimulationDate::START);
+        assert_eq!(event.tick_index, 0);
+        assert_eq!(event.category, EventCategory::UserIntervention);
+        assert_eq!(event.source, EventSource::User);
+        assert_eq!(
+            event.payload,
+            EventPayload::CommandExecuted { command_id }
+        );
+    }
+
+    #[test]
+    fn country_ai_command_records_country_source_without_inventing_domain_event() {
+        let mut engine = SimulationEngine::new(1);
+        engine
+            .submit_country_ai_command(
+                CountryId(6),
+                CommandTiming::Immediate,
+                CommandPayload::NoOp { token: 60 },
+            )
+            .expect("valid AI command");
+
+        engine.step_one_day();
+        let event = engine.event_log()[0];
+        assert_eq!(event.category, EventCategory::System);
+        assert_eq!(event.source, EventSource::Country(CountryId(6)));
+    }
+
+    #[test]
+    fn event_query_filters_by_category_source_and_date() {
+        let mut engine = SimulationEngine::new(1);
+        engine
+            .submit_user_command(CommandTiming::Immediate, CommandPayload::NoOp { token: 1 })
+            .expect("valid user command");
+        engine
+            .submit_country_ai_command(
+                CountryId(3),
+                CommandTiming::Scheduled(SimulationDate::new(1, 1, 2)),
+                CommandPayload::NoOp { token: 2 },
+            )
+            .expect("valid AI command");
+        engine.advance_days(2);
+
+        let user_events = engine
+            .query_events(EventFilter {
+                category: Some(EventCategory::UserIntervention),
+                ..EventFilter::default()
+            })
+            .count();
+        assert_eq!(user_events, 1);
+
+        let country_events = engine
+            .query_events(EventFilter {
+                source: Some(EventSource::Country(CountryId(3))),
+                from_date: Some(SimulationDate::new(1, 1, 2)),
+                through_date: Some(SimulationDate::new(1, 1, 2)),
+                ..EventFilter::default()
+            })
+            .count();
+        assert_eq!(country_events, 1);
+    }
+
+    #[test]
+    fn command_and_event_order_are_identical_at_manual_and_high_speed_playback() {
         fn seed_commands(engine: &mut SimulationEngine) {
             engine
                 .submit_country_ai_command(
@@ -584,6 +709,7 @@ mod tests {
         clock.advance_real_time(&mut realtime, Duration::from_secs(1));
 
         assert_eq!(manual.command_log(), realtime.command_log());
+        assert_eq!(manual.event_log(), realtime.event_log());
         assert_eq!(manual.state_digest(), realtime.state_digest());
     }
 }
