@@ -1,0 +1,28 @@
+name: Stage 2 Temporary Clippy Capture
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+jobs:
+  clippy-capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Capture strict Clippy diagnostics
+        run: cargo clippy --locked --workspace --all-targets --message-format=short -- -D warnings > stage2-clippy.log 2>&1 || true
+      - name: Persist diagnostics
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f stage2-clippy.log
+          git commit -m "chore: capture Stage 2.2 Clippy diagnostics"
+          git push origin HEAD:${{ github.head_ref }}
