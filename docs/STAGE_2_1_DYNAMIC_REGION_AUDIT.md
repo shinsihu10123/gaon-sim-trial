@@ -1,8 +1,9 @@
 # Stage 2.1 Dynamic Region Audit
 
-Status: **UNDER VALIDATION**
+Status: **PASS**
 
 Validation branch: `feature/stage-2-1-dynamic-region-audit`
+Validated implementation head: `82102d8b7efd8052664a73663cb08217e0abe936`
 
 WBS v2.0 re-review scope:
 
@@ -12,13 +13,13 @@ WBS v2.0 re-review scope:
 
 ## Audit findings
 
-### 2.1.3 World coordinates and size
+### 2.1.3 World coordinates and size — PASS
 
 `WorldBounds` and `MapPoint` are expressed in integer metres and are not derived from Region count. The terrain heightfield owns its own bounds/grid dimensions. No coordinate calculation requires 60 Regions.
 
-Decision before CI: retain the coordinate model and certify it with variable-count topology tests.
+The existing coordinate model is retained. Variable-count topology tests certify that changing Region count does not change the coordinate contract.
 
-### 2.1.4 Region identity
+### 2.1.4 Region identity — PASS
 
 The previous validator contained fixed-count assumptions:
 
@@ -27,21 +28,22 @@ The previous validator contained fixed-count assumptions:
 - Region ID was assumed to equal `vector_index + 1`
 - lookup used `id - 1` as a direct vector index
 
-Refactor under validation:
+Refactor completed:
 
-- keep `TRIAL_REGION_COUNT = 60` only as Standard Benchmark S fixture data
-- initialized topology accepts variable Region counts
+- `TRIAL_REGION_COUNT = 60` remains only as Standard Benchmark S fixture data
+- initialized topology accepts any positive Region count representable by the current collection
 - Region IDs must be non-zero, unique and strictly ascending
 - IDs may be sparse/non-contiguous
 - lookup uses ID binary search rather than index identity
+- an initialized spatial state with zero Regions remains invalid; `(None, [])` is the sole uninitialized representation
 
-The current `RegionId(u16)` representation is not being generalized into the common Stable Entity ID in this audit. Stable cross-entity identity is WBS 2.5.1 and Region Registry migration is WBS 2.5.4.
+The current `RegionId(u16)` representation is intentionally not generalized into the common Stable Entity ID in this audit. Stable cross-entity identity is WBS 2.5.1 and Region Registry migration is WBS 2.5.4.
 
-### 2.1.5 Adjacency graph
+### 2.1.5 Adjacency graph — PASS
 
 The previous validator rejected neighbor IDs above 60 even if a Region existed.
 
-Refactor under validation:
+Refactor completed:
 
 - neighbor validity is based on actual Region existence
 - adjacency remains reciprocal
@@ -51,22 +53,50 @@ Refactor under validation:
 
 ## Persistence and rendering audit
 
-The current binary save codec already writes a dynamic Region count before serializing Region records and allocates based on the decoded count. It therefore does not use 60 as its binary collection length.
+The binary save codec writes a dynamic Region count before serializing Region records and allocates based on the decoded count. It does not use 60 as its binary collection length.
 
-The RenderSnapshot protocol already maps `world.spatial.regions.iter()` into a variable-length `Vec<RenderRegionSnapshot>`.
+The RenderSnapshot protocol maps `world.spatial.regions.iter()` into a variable-length `Vec<RenderRegionSnapshot>`.
 
-## Validation notes
+No save-format bump was required for this audit because the existing collection codec was already variable-length and the serialized Region fields did not change.
 
-The first permanent Core CI attempt stopped at formatting only. After rustfmt normalization, the next Core attempt passed format and found one strict-Clippy documentation requirement on the backward-compatible `new_trial` Result-returning API. The API documentation is being corrected without changing behavior before the full test gate is re-run.
+## Validation evidence
 
-## Completion gate
+Permanent Core CI run `31203814765` — **PASS**
 
-The three re-review items return to PASS only after:
+Verified:
 
-1. rustfmt PASS
-2. strict Clippy PASS
-3. complete Rust workspace tests PASS
-4. headless save/load/replay PASS
-5. Viewer/WASM production path PASS
-6. Stage 2.1 source contract PASS with fixed-count core assumptions explicitly forbidden
-7. final evidence recorded on the validated head
+- `cargo fmt --all -- --check` — PASS
+- strict Clippy with `-D warnings` — PASS
+- complete locked Rust workspace tests — PASS
+- new 12/60/75 Region count coverage — PASS
+- sparse/non-contiguous Region ID lookup — PASS
+- existence-based adjacency validation — PASS
+- initialized zero-Region topology rejection — PASS
+- existing save invariants — PASS
+- headless save/load/replay — PASS
+
+Permanent Viewer CI run `31203814799` — **PASS**
+
+Verified:
+
+- locked Rust workspace — PASS
+- actual WASM adapter build — PASS
+- `npm ci` — PASS
+- TypeScript typecheck — PASS
+- Vite production build — PASS
+- Viewer ownership/source contract chain — PASS
+- updated Stage 2.1 source contract — PASS
+
+## WBS restoration
+
+- [x] 2.1.3 world coordinate/size valid under variable Region structure
+- [x] 2.1.4 Region identity no longer treats 60 as a core limit
+- [x] 2.1.5 adjacency graph validated for variable/sparse Region identity
+
+All three v2.0 re-review items satisfy the completion rule again: implementation exists, integration validation passed, and evidence is recorded.
+
+## Final decision
+
+**Stage 2.1 dynamic Region re-review: PASS**
+
+Next development target: Stage 2.5 `Dynamic Entity Architecture`.
