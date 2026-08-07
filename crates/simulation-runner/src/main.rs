@@ -3,9 +3,7 @@
 use std::time::Duration;
 
 use simulation_core::{SimulationClock, SimulationEngine, SimulationSpeed};
-use simulation_model::{
-    CommandPayload, CommandTiming, CountryId, SimulationDate, TerrainState,
-};
+use simulation_model::{CommandPayload, CommandTiming, CountryId, SimulationDate, TerrainState};
 use simulation_save::{create_bundle, SaveKind};
 use simulation_worldgen::generate_trial_terrain;
 
