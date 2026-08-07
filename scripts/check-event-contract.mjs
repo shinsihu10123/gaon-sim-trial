@@ -64,3 +64,5 @@ if (!doc.includes("Command = intent") || !doc.includes("Event = fact")) {
 }
 
 console.log("Stage 1.4 Event Ledger contract verified");
+
+await import("./check-save-contract.mjs");
