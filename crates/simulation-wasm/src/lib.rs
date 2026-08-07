@@ -15,6 +15,11 @@ impl SimulationWasm {
     ///
     /// A 16-digit hexadecimal seed avoids JavaScript's lossy 53-bit integer
     /// conversion for arbitrary Rust `u64` seeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JavaScript error when the seed is not exactly 16 hexadecimal
+    /// digits or cannot be represented as a Rust `u64`.
     #[wasm_bindgen(constructor)]
     pub fn new(seed_hex: &str) -> Result<SimulationWasm, JsValue> {
         let seed = parse_seed_hex(seed_hex).map_err(|message| JsValue::from_str(&message))?;
@@ -23,11 +28,23 @@ impl SimulationWasm {
         })
     }
 
+    /// Serializes the current renderer-facing snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JavaScript error when the authoritative digest or JSON
+    /// serialization cannot be produced.
     #[wasm_bindgen(js_name = snapshotJson)]
     pub fn snapshot_json(&self) -> Result<String, JsValue> {
         self.encode_snapshot()
     }
 
+    /// Advances the authoritative engine and returns the resulting snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JavaScript error when the resulting authoritative digest or
+    /// JSON serialization cannot be produced.
     #[wasm_bindgen(js_name = advanceDays)]
     pub fn advance_days(&mut self, days: u32) -> Result<String, JsValue> {
         self.engine.advance_days(u64::from(days));
