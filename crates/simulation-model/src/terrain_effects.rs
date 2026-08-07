@@ -1,4 +1,6 @@
-use crate::{BiomeClass, ReliefClass, TerrainHydrology, TerrainState, NO_DOWNSTREAM_INDEX};
+use crate::{
+    BiomeClass, ReliefClass, TerrainHydrology, TerrainSample, TerrainState, NO_DOWNSTREAM_INDEX,
+};
 
 /// Terrain-only multipliers and capacities consumed by later economic,
 /// infrastructure and military systems.
@@ -90,7 +92,7 @@ pub fn derive_terrain_effects(terrain: &TerrainState) -> TerrainEffectField {
         .samples
         .iter()
         .enumerate()
-        .map(|(index, sample)| effects_for_sample(terrain, &hydrology, index, sample))
+        .map(|(index, sample)| effects_for_sample(terrain, &hydrology, index, *sample))
         .collect();
     TerrainEffectField { samples }
 }
@@ -99,7 +101,7 @@ fn effects_for_sample(
     terrain: &TerrainState,
     hydrology: &TerrainHydrology,
     index: usize,
-    sample: &crate::TerrainSample,
+    sample: TerrainSample,
 ) -> TerrainEffects {
     if sample.elevation_m < terrain.sea_level_m {
         return TerrainEffects::OCEAN;
@@ -127,7 +129,7 @@ fn effects_for_sample(
     }
 }
 
-fn agriculture_yield(sample: &crate::TerrainSample, river_order: u8) -> u16 {
+fn agriculture_yield(sample: TerrainSample, river_order: u8) -> u16 {
     let biome_base = match sample.biome {
         BiomeClass::Ocean => 0,
         BiomeClass::Grassland => 900,
@@ -153,7 +155,7 @@ fn agriculture_yield(sample: &crate::TerrainSample, river_order: u8) -> u16 {
     )
 }
 
-fn construction_cost(sample: &crate::TerrainSample) -> u16 {
+fn construction_cost(sample: TerrainSample) -> u16 {
     let relief = match sample.relief {
         ReliefClass::DeepOcean | ReliefClass::ShallowOcean => 0,
         ReliefClass::Coast => 1_100,
@@ -162,8 +164,7 @@ fn construction_cost(sample: &crate::TerrainSample) -> u16 {
         ReliefClass::Mountains => 1_750,
     };
     let cover = match sample.biome {
-        BiomeClass::Ocean => 0,
-        BiomeClass::Grassland => 0,
+        BiomeClass::Ocean | BiomeClass::Grassland => 0,
         BiomeClass::Forest => 150,
         BiomeClass::Desert => 50,
         BiomeClass::Wetland => 350,
@@ -172,7 +173,7 @@ fn construction_cost(sample: &crate::TerrainSample) -> u16 {
     clamp_u16(relief + cover, 1_000, 2_200)
 }
 
-fn movement_cost(sample: &crate::TerrainSample, river_order: u8) -> u16 {
+fn movement_cost(sample: TerrainSample, river_order: u8) -> u16 {
     let relief = match sample.relief {
         ReliefClass::DeepOcean | ReliefClass::ShallowOcean => 0,
         ReliefClass::Coast => 1_050,
@@ -181,8 +182,7 @@ fn movement_cost(sample: &crate::TerrainSample, river_order: u8) -> u16 {
         ReliefClass::Mountains => 1_700,
     };
     let cover = match sample.biome {
-        BiomeClass::Ocean => 0,
-        BiomeClass::Grassland => 0,
+        BiomeClass::Ocean | BiomeClass::Grassland => 0,
         BiomeClass::Forest => 150,
         BiomeClass::Desert => 100,
         BiomeClass::Wetland => 300,
@@ -192,7 +192,7 @@ fn movement_cost(sample: &crate::TerrainSample, river_order: u8) -> u16 {
     clamp_u16(relief + cover + river_crossing, 1_000, 2_200)
 }
 
-fn defense_multiplier(sample: &crate::TerrainSample) -> u16 {
+fn defense_multiplier(sample: TerrainSample) -> u16 {
     let relief = match sample.relief {
         ReliefClass::DeepOcean | ReliefClass::ShallowOcean => 0,
         ReliefClass::Coast => 1_000,
@@ -209,7 +209,7 @@ fn defense_multiplier(sample: &crate::TerrainSample) -> u16 {
     clamp_u16(relief + cover, 850, 1_700)
 }
 
-fn port_feasibility(sample: &crate::TerrainSample, river_mouth: bool) -> u16 {
+fn port_feasibility(sample: TerrainSample, river_mouth: bool) -> u16 {
     if sample.relief != ReliefClass::Coast {
         return 0;
     }
@@ -227,21 +227,20 @@ fn port_feasibility(sample: &crate::TerrainSample, river_mouth: bool) -> u16 {
     )
 }
 
-fn carrying_capacity(sample: &crate::TerrainSample, agriculture: u16, river_order: u8) -> u16 {
+fn carrying_capacity(sample: TerrainSample, agriculture: u16, river_order: u8) -> u16 {
     let coast_bonus = if sample.relief == ReliefClass::Coast {
         25
     } else {
         0
     };
-    let river_bonus = u16::from(river_order) * 10;
+    let river_bonus = i32::from(river_order) * 10;
     let altitude_penalty = if sample.elevation_m > 2_000 { 40 } else { 0 };
-    let raw = 10_i32 + i32::from(agriculture) / 6 + i32::from(coast_bonus) + i32::from(river_bonus)
-        - altitude_penalty;
+    let raw = 10_i32 + i32::from(agriculture) / 6 + coast_bonus + river_bonus - altitude_penalty;
     clamp_u16(raw, 5, 280)
 }
 
 fn productivity_multiplier(
-    sample: &crate::TerrainSample,
+    sample: TerrainSample,
     construction: u16,
     movement: u16,
     river_order: u8,
@@ -307,9 +306,9 @@ mod tests {
             relief: ReliefClass::Mountains,
             biome: BiomeClass::Alpine,
         };
-        assert!(construction_cost(&plains) < construction_cost(&mountains));
-        assert!(movement_cost(&plains, 0) < movement_cost(&mountains, 0));
-        assert!(defense_multiplier(&plains) < defense_multiplier(&mountains));
+        assert!(construction_cost(plains) < construction_cost(mountains));
+        assert!(movement_cost(plains, 0) < movement_cost(mountains, 0));
+        assert!(defense_multiplier(plains) < defense_multiplier(mountains));
     }
 
     #[test]
@@ -326,6 +325,6 @@ mod tests {
             relief: ReliefClass::Plains,
             biome: BiomeClass::Desert,
         };
-        assert!(agriculture_yield(&grassland, 0) > agriculture_yield(&desert, 0));
+        assert!(agriculture_yield(grassland, 0) > agriculture_yield(desert, 0));
     }
 }
