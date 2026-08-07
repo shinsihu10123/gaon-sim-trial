@@ -41,8 +41,12 @@ fn main() {
     )
     .expect("headless command journal must replay");
     let mut replay_snapshot = replayed_without_worldgen.export_snapshot();
-    replay_snapshot.world.terrain =
-        Some(generate_trial_terrain(engine.state().seed).expect("replay terrain must regenerate"));
+    let replay_terrain =
+        generate_trial_terrain(engine.state().seed).expect("replay terrain must regenerate");
+    let replay_resources = generate_trial_resources(engine.state().seed, &replay_terrain)
+        .expect("replay resources must regenerate");
+    replay_snapshot.world.resources = Some(replay_resources);
+    replay_snapshot.world.terrain = Some(replay_terrain);
     let replay_bundle =
         create_bundle(&replay_snapshot, SaveKind::Manual).expect("replay snapshot must save");
     let replayed =
