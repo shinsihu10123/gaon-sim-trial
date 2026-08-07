@@ -1,0 +1,28 @@
+name: Stage 2.3 Format Once
+
+on:
+  push:
+    branches: [feature/stage-2-3-terrain-effects]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stage-2-3-terrain-effects
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all
+      - name: Persist formatting and remove this workflow
+        run: |
+          rm .github/workflows/stage2-3-format-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates .github/workflows/stage2-3-format-once.yml
+          git commit -m "style: normalize Stage 2.3 terrain effects"
+          git push origin HEAD:feature/stage-2-3-terrain-effects
