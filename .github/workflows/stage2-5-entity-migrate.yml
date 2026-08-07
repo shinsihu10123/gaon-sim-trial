@@ -1,0 +1,435 @@
+name: Stage 2.5 Entity Migration
+
+on:
+  push:
+    branches: [feature/stage-2-5-dynamic-entity]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stage-2-5-dynamic-entity
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Apply entity architecture migration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'anchor not found in {path}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          # Region removal must be atomic: reject the final removal before mutation.
+          replace_once(
+              'crates/simulation-model/src/world.rs',
+              '''    pub fn remove_region(&mut self, id: RegionId) -> Result<RegionState, WorldSpatialError> {
+        let removed = self
+            .regions
+            .remove(id)
+            .map_err(|_| WorldSpatialError::UnknownRegion { region: id })?;
+        if self.regions.is_empty() {
+            return Err(WorldSpatialError::PartialInitialization);
+        }
+        self.validate()?;
+        Ok(removed)
+    }
+''',
+              '''    pub fn remove_region(&mut self, id: RegionId) -> Result<RegionState, WorldSpatialError> {
+        if self.regions.len() <= 1 {
+            return Err(WorldSpatialError::PartialInitialization);
+        }
+        let removed = self
+            .regions
+            .remove(id)
+            .map_err(|_| WorldSpatialError::UnknownRegion { region: id })?;
+        self.validate()?;
+        Ok(removed)
+    }
+'''
+          )
+
+          # Command source, priority and payload become the deterministic lifecycle journal.
+          replace_once(
+              'crates/simulation-model/src/lib.rs',
+              '''pub enum CommandSource {
+    User,
+    CountryAi(CountryId),
+}
+''',
+              '''pub enum CommandSource {
+    System,
+    User,
+    CountryAi(CountryId),
+}
+'''
+          )
+          replace_once(
+              'crates/simulation-model/src/lib.rs',
+              '''pub enum CommandPriority {
+    UserIntervention = 10,
+    CountryAi = 20,
+}
+
+impl CommandPriority {
+    #[must_use]
+    pub const fn for_source(source: CommandSource) -> Self {
+        match source {
+            CommandSource::User => Self::UserIntervention,
+            CommandSource::CountryAi(_) => Self::CountryAi,
+        }
+    }
+}
+''',
+              '''pub enum CommandPriority {
+    System = 0,
+    UserIntervention = 10,
+    CountryAi = 20,
+}
+
+impl CommandPriority {
+    #[must_use]
+    pub const fn for_source(source: CommandSource) -> Self {
+        match source {
+            CommandSource::System => Self::System,
+            CommandSource::User => Self::UserIntervention,
+            CommandSource::CountryAi(_) => Self::CountryAi,
+        }
+    }
+}
+'''
+          )
+          replace_once(
+              'crates/simulation-model/src/lib.rs',
+              '''pub enum CommandPayload {
+    NoOp { token: u64 },
+}
+''',
+              '''pub enum CommandPayload {
+    NoOp { token: u64 },
+    CreateCountryEntity,
+    RemoveCountryEntity { country_id: CountryId },
+    CreateCityEntity {
+        country_id: Option<CountryId>,
+        region_id: Option<RegionId>,
+    },
+    RemoveCityEntity { city_id: CityId },
+    CreateRegionEntity { draft: RegionDraft },
+    RemoveRegionEntity { region_id: RegionId },
+}
+
+impl CommandPayload {
+    #[must_use]
+    pub fn references_country(&self, country_id: CountryId) -> bool {
+        match self {
+            Self::RemoveCountryEntity { country_id: referenced } => *referenced == country_id,
+            Self::CreateCityEntity { country_id: Some(referenced), .. } => *referenced == country_id,
+            Self::CreateRegionEntity { draft } => {
+                draft.political.legal_owner == Some(country_id)
+                    || draft.political.controller == Some(country_id)
+            }
+            Self::NoOp { .. }
+            | Self::CreateCountryEntity
+            | Self::CreateCityEntity { country_id: None, .. }
+            | Self::RemoveCityEntity { .. }
+            | Self::RemoveRegionEntity { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn references_region(&self, region_id: RegionId) -> bool {
+        match self {
+            Self::CreateCityEntity { region_id: Some(referenced), .. } => *referenced == region_id,
+            Self::CreateRegionEntity { draft } => draft.neighbors.contains(&region_id),
+            Self::RemoveRegionEntity { region_id: referenced } => *referenced == region_id,
+            Self::NoOp { .. }
+            | Self::CreateCountryEntity
+            | Self::RemoveCountryEntity { .. }
+            | Self::CreateCityEntity { region_id: None, .. }
+            | Self::RemoveCityEntity { .. } => false,
+        }
+    }
+}
+'''
+          )
+          replace_once(
+              'crates/simulation-model/src/lib.rs',
+              '''impl CommandRequest {
+    #[must_use]
+    pub const fn user(timing: CommandTiming, payload: CommandPayload) -> Self {
+''',
+              '''impl CommandRequest {
+    #[must_use]
+    pub const fn system(timing: CommandTiming, payload: CommandPayload) -> Self {
+        Self {
+            source: CommandSource::System,
+            timing,
+            payload,
+        }
+    }
+
+    #[must_use]
+    pub const fn user(timing: CommandTiming, payload: CommandPayload) -> Self {
+'''
+          )
+
+          # Core owns lifecycle execution and emits lifecycle facts before the command-executed fact.
+          replace_once(
+              'crates/simulation-core/src/lib.rs',
+              'mod event_ledger;\n',
+              'mod entity_lifecycle;\nmod event_ledger;\n'
+          )
+          replace_once(
+              'crates/simulation-core/src/lib.rs',
+              '''    /// Submits a user-originated command using the user intervention priority.
+''',
+              '''    /// Submits a system-originated deterministic lifecycle command.
+    ///
+    /// # Errors
+    /// Returns [`CommandError`] under the same scheduling rules as other commands.
+    pub fn submit_system_command(
+        &mut self,
+        timing: CommandTiming,
+        payload: CommandPayload,
+    ) -> Result<CommandId, CommandError> {
+        self.submit_command(CommandRequest::system(timing, payload))
+    }
+
+    /// Submits a user-originated command using the user intervention priority.
+'''
+          )
+          replace_once(
+              'crates/simulation-core/src/lib.rs',
+              '''        match &command.payload {
+            CommandPayload::NoOp { .. } => {}
+        }
+
+        self.executed_commands.push(CommandExecutionRecord {
+''',
+              '''        let lifecycle_event = self.apply_entity_payload(&command.payload).ok().flatten();
+
+        self.executed_commands.push(CommandExecutionRecord {
+'''
+          )
+          replace_once(
+              'crates/simulation-core/src/lib.rs',
+              '''        let (category, source) = match command_source {
+            CommandSource::User => (EventCategory::UserIntervention, EventSource::User),
+            CommandSource::CountryAi(country_id) => {
+                (EventCategory::System, EventSource::Country(country_id))
+            }
+        };
+
+        self.event_ledger.append(
+''',
+              '''        if let Some(payload) = lifecycle_event {
+            self.event_ledger.append(
+                executed_on,
+                self.state.elapsed_days,
+                EventDraft {
+                    category: EventCategory::EntityLifecycle,
+                    source: EventSource::System,
+                    payload,
+                },
+            );
+        }
+
+        let (category, source) = match command_source {
+            CommandSource::System => (EventCategory::System, EventSource::System),
+            CommandSource::User => (EventCategory::UserIntervention, EventSource::User),
+            CommandSource::CountryAi(country_id) => {
+                (EventCategory::System, EventSource::Country(country_id))
+            }
+        };
+
+        self.event_ledger.append(
+'''
+          )
+
+          # Save v5 extends canonical state with allocator-backed entity registries.
+          replace_once(
+              'crates/simulation-save/src/lib.rs',
+              '/// Stage 2.4 adds finite resource stocks to authoritative state.\npub const SAVE_FORMAT_VERSION: u32 = 4;',
+              '/// Stage 2.5 adds dynamic entity registries and stable allocator state.\npub const SAVE_FORMAT_VERSION: u32 = 5;'
+          )
+          replace_once(
+              'crates/simulation-save/src/lib.rs',
+              '''    if world.spatial.validate().is_err() {
+        return Err(SaveError::SnapshotInvariant(
+            "world spatial state violates Stage 2.1 topology invariants",
+        ));
+    }
+    Ok(())
+}
+''',
+              '''    if world.spatial.validate().is_err() {
+        return Err(SaveError::SnapshotInvariant(
+            "world spatial state violates Stage 2.1 topology invariants",
+        ));
+    }
+
+    use simulation_model::EntityRegistry as _;
+    for region in world.spatial.regions.iter() {
+        for country in [region.political.legal_owner, region.political.controller]
+            .into_iter()
+            .flatten()
+        {
+            if !world.entities.countries.contains(country) {
+                return Err(SaveError::SnapshotInvariant(
+                    "Region references an unknown active country",
+                ));
+            }
+        }
+    }
+    for city in world.entities.cities.iter() {
+        if city
+            .country
+            .is_some_and(|country| !world.entities.countries.contains(country))
+            || city
+                .region
+                .is_some_and(|region| world.spatial.region(region).is_none())
+        {
+            return Err(SaveError::SnapshotInvariant(
+                "City references an unknown active entity",
+            ));
+        }
+    }
+    Ok(())
+}
+'''
+          )
+          replace_once(
+              'crates/simulation-save/src/lib.rs',
+              '''        match event.payload {
+            EventPayload::CommandExecuted { command_id } => {
+''',
+              '''        match event.payload {
+            EventPayload::CommandExecuted { command_id } => {
+'''
+          )
+          replace_once(
+              'crates/simulation-save/src/lib.rs',
+              '''                validate_command_event_attribution(event, *source)?;
+            }
+        }
+    }
+''',
+              '''                validate_command_event_attribution(event, *source)?;
+            }
+            EventPayload::EntityCreated { entity } | EventPayload::EntityRemoved { entity } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                    || !entity.id.is_valid()
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity lifecycle event attribution is invalid",
+                    ));
+                }
+            }
+        }
+    }
+'''
+          )
+
+          # Render protocol uses decimal strings for u64 entity IDs across the JS boundary.
+          replace_once(
+              'crates/simulation-protocol/src/lib.rs',
+              'pub const RENDER_SNAPSHOT_VERSION: u32 = 3;',
+              'pub const RENDER_SNAPSHOT_VERSION: u32 = 4;'
+          )
+          replace_once(
+              'crates/simulation-protocol/src/lib.rs',
+              '''pub struct RenderRegionSnapshot {
+    pub id: u16,
+    pub surface: RenderRegionSurface,
+    pub center: RenderMapPoint,
+    pub boundary: Vec<RenderMapPoint>,
+    pub neighbors: Vec<u16>,
+    pub legal_owner: Option<u16>,
+    pub controller: Option<u16>,
+}
+''',
+              '''pub struct RenderRegionSnapshot {
+    pub id: String,
+    pub surface: RenderRegionSurface,
+    pub center: RenderMapPoint,
+    pub boundary: Vec<RenderMapPoint>,
+    pub neighbors: Vec<String>,
+    pub legal_owner: Option<String>,
+    pub controller: Option<String>,
+}
+'''
+          )
+          replace_once(
+              'crates/simulation-protocol/src/lib.rs',
+              '''            id: region.id.0,
+            surface: region.surface.into(),
+            center: region.center.into(),
+            boundary: region.boundary.iter().copied().map(Into::into).collect(),
+            neighbors: region.neighbors.iter().map(|neighbor| neighbor.0).collect(),
+            legal_owner: region.political.legal_owner.map(|country| country.0),
+            controller: region.political.controller.map(|country| country.0),
+''',
+              '''            id: region.id.0.to_string(),
+            surface: region.surface.into(),
+            center: region.center.into(),
+            boundary: region.boundary.iter().copied().map(Into::into).collect(),
+            neighbors: region
+                .neighbors
+                .iter()
+                .map(|neighbor| neighbor.0.to_string())
+                .collect(),
+            legal_owner: region
+                .political
+                .legal_owner
+                .map(|country| country.0.to_string()),
+            controller: region
+                .political
+                .controller
+                .map(|country| country.0.to_string()),
+'''
+          )
+          replace_once(
+              'viewer/src/types.ts',
+              '''export interface RenderRegionSnapshot {
+  id: number;
+  surface: RegionSurface;
+  center: RenderMapPoint;
+  boundary: RenderMapPoint[];
+  neighbors: number[];
+  legalOwner: number | null;
+  controller: number | null;
+}
+''',
+              '''export interface RenderRegionSnapshot {
+  id: string;
+  surface: RegionSurface;
+  center: RenderMapPoint;
+  boundary: RenderMapPoint[];
+  neighbors: string[];
+  legalOwner: string | null;
+  controller: string | null;
+}
+'''
+          )
+
+          cargo fmt --all
+          PY
+      - name: Commit migration
+        run: |
+          rm .github/workflows/stage2-5-entity-migrate.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: wire dynamic entity lifecycle foundation"
+          git push
