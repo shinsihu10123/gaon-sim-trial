@@ -70,3 +70,5 @@ if (!doc.includes("100-year continuation")) {
 }
 
 console.log("Stage 1.5 save/restore contract verified");
+
+await import("./check-determinism-contract.mjs");
