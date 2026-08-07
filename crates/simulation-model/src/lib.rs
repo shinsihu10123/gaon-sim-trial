@@ -1,11 +1,16 @@
 #![forbid(unsafe_code)]
 
 mod event;
+mod resources;
 mod terrain;
 mod terrain_effects;
 mod world;
 
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
+pub use resources::{
+    food_capacity_from_terrain_effects, ExtractionResult, ResourceAggregate, ResourceCellState,
+    ResourceDeposit, ResourceError, ResourceErrorKind, ResourceFieldState,
+};
 pub use terrain::{
     trial_terrain_bounds, BiomeClass, ReliefClass, TerrainError, TerrainHydrology,
     TerrainLandmasses, TerrainSample, TerrainState, NO_DOWNSTREAM_INDEX, TERRAIN_GRID_SIDE,
@@ -266,6 +271,7 @@ pub struct WorldState {
     pub elapsed_days: u64,
     pub seed: u64,
     pub terrain: Option<TerrainState>,
+    pub resources: Option<ResourceFieldState>,
     pub spatial: WorldSpatialState,
 }
 
@@ -277,6 +283,7 @@ impl WorldState {
             elapsed_days: 0,
             seed,
             terrain: None,
+            resources: None,
             spatial: WorldSpatialState::uninitialized(),
         }
     }
@@ -296,6 +303,7 @@ mod tests {
         assert_eq!(world.elapsed_days, 0);
         assert_eq!(world.seed, 42);
         assert!(world.terrain.is_none());
+        assert!(world.resources.is_none());
         assert!(!world.spatial.is_initialized());
         assert!(world.spatial.regions.is_empty());
     }
