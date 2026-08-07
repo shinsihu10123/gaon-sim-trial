@@ -13,24 +13,25 @@ Status: **IN PROGRESS**
 - Forced continuous outer ocean
 - Relief and biome classification
 - Deterministic adjacent-slope limiter
-- Seed-derived island generation and landmass topology
-- Deterministic downstream routing, drainage-basin IDs and flow accumulation
+- Seed-derived island generation
+- Deterministic connected-landmass and island IDs derived from the canonical heightfield
+- Deterministic downstream routing, drainage-basin IDs and flow accumulation derived from the canonical heightfield
 - River-order derivation
-- Save format v4 migration queued for derived geography
-- RenderSnapshot v3 migration queued for hydrology/landmass arrays
+- Save format v3 retained: the canonical heightfield is serialized and derived geography is regenerated, avoiding duplicated state
+- RenderSnapshot v3 hydrology and landmass arrays
 - Browser WASM terrain bootstrap
 - Headless terrain replay reconstruction
-- Three.js authoritative heightfield and sea-level mesh
+- Save/load/replay equality assertions for derived hydrology and landmasses
+- Three.js authoritative heightfield, sea-level mesh and river network
 - Terrain-specific source contract
 - Canonical-state terrain checksum test
 
 ## Validation status
 
-- one-shot hydrology schema migration: triggered
-- rustfmt: pending after migration
-- strict Clippy: pending after migration
-- complete Rust workspace tests: pending after migration
-- headless deterministic regression: pending after migration
+- rustfmt: normalization triggered
+- strict Clippy: pending after formatting
+- complete Rust workspace tests: pending after formatting
+- headless deterministic regression: pending after formatting
 - locked Cargo graph verification: pending
 - actual browser WASM build: pending
 - npm ci: pending
