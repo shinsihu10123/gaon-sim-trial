@@ -110,31 +110,16 @@ impl AutosavePolicy {
 pub enum SaveError {
     MetadataEncode(String),
     MetadataDecode(String),
-    UnsupportedMetadataVersion {
-        found: u32,
-    },
-    UnsupportedBinaryVersion {
-        found: u32,
-    },
+    UnsupportedMetadataVersion { found: u32 },
+    UnsupportedBinaryVersion { found: u32 },
     InvalidMetadata(&'static str),
     InvalidBinary(&'static str),
-    ChecksumMismatch {
-        expected: u64,
-        actual: u64,
-    },
+    ChecksumMismatch { expected: u64, actual: u64 },
     TruncatedBinary,
     TrailingBinaryData,
-    InvalidTag {
-        field: &'static str,
-        tag: u8,
-    },
-    RecordCountOverflow {
-        section: &'static str,
-    },
-    RecordLimitExceeded {
-        section: &'static str,
-        count: u64,
-    },
+    InvalidTag { field: &'static str, tag: u8 },
+    RecordCountOverflow { section: &'static str },
+    RecordLimitExceeded { section: &'static str, count: u64 },
     SnapshotInvariant(&'static str),
     InvalidAutosaveInterval,
 }
@@ -162,10 +147,16 @@ impl core::fmt::Display for SaveError {
                 write!(formatter, "invalid {field} tag {tag}")
             }
             Self::RecordCountOverflow { section } => {
-                write!(formatter, "{section} count cannot be represented by save format")
+                write!(
+                    formatter,
+                    "{section} count cannot be represented by save format"
+                )
             }
             Self::RecordLimitExceeded { section, count } => {
-                write!(formatter, "{section} record count {count} exceeds safety limit")
+                write!(
+                    formatter,
+                    "{section} record count {count} exceeds safety limit"
+                )
             }
             Self::SnapshotInvariant(message) => {
                 write!(formatter, "snapshot invariant failed: {message}")
@@ -279,9 +270,11 @@ pub fn validate_snapshot(snapshot: &EngineSnapshot) -> Result<(), SaveError> {
         }
     }
 
-    if !snapshot.pending_commands.windows(2).all(|pair| {
-        command_key(&pair[0]) <= command_key(&pair[1])
-    }) {
+    if !snapshot
+        .pending_commands
+        .windows(2)
+        .all(|pair| command_key(&pair[0]) <= command_key(&pair[1]))
+    {
         return Err(SaveError::SnapshotInvariant(
             "pending command queue is not in canonical order",
         ));
@@ -295,17 +288,17 @@ pub fn validate_snapshot(snapshot: &EngineSnapshot) -> Result<(), SaveError> {
         executed_sources.insert(record.command.id, record.command.source);
     }
 
-    if !snapshot.executed_commands.windows(2).all(|pair| {
-        execution_key(&pair[0]) <= execution_key(&pair[1])
-    }) {
+    if !snapshot
+        .executed_commands
+        .windows(2)
+        .all(|pair| execution_key(&pair[0]) <= execution_key(&pair[1]))
+    {
         return Err(SaveError::SnapshotInvariant(
             "executed command log is not in canonical order",
         ));
     }
 
-    let expected_next_command = command_ids
-        .last()
-        .map_or(1, |id| id.0.saturating_add(1));
+    let expected_next_command = command_ids.last().map_or(1, |id| id.0.saturating_add(1));
     if snapshot.next_command_id != expected_next_command || snapshot.next_command_id == 0 {
         return Err(SaveError::SnapshotInvariant(
             "next command id does not follow accepted command history",
@@ -347,7 +340,9 @@ fn validate_command(command: &QueuedCommand, world: &WorldState) -> Result<(), S
         return Err(SaveError::SnapshotInvariant("command id must be nonzero"));
     }
     if !command.submitted_on.is_valid() || !command.execute_on.is_valid() {
-        return Err(SaveError::SnapshotInvariant("command contains invalid date"));
+        return Err(SaveError::SnapshotInvariant(
+            "command contains invalid date",
+        ));
     }
     if command.submitted_on > world.date {
         return Err(SaveError::SnapshotInvariant(
@@ -420,11 +415,12 @@ fn validate_events(
 
         match event.payload {
             EventPayload::CommandExecuted { command_id } => {
-                let source = executed_sources.get(&command_id).ok_or(
-                    SaveError::SnapshotInvariant(
-                        "command-executed event references unknown executed command",
-                    ),
-                )?;
+                let source =
+                    executed_sources
+                        .get(&command_id)
+                        .ok_or(SaveError::SnapshotInvariant(
+                            "command-executed event references unknown executed command",
+                        ))?;
                 if !command_event_ids.insert(command_id) {
                     return Err(SaveError::SnapshotInvariant(
                         "executed command has duplicate execution events",
@@ -505,9 +501,7 @@ fn command_key(command: &QueuedCommand) -> (SimulationDate, CommandPriority, Com
     (command.execute_on, command.priority, command.id)
 }
 
-fn execution_key(
-    record: &CommandExecutionRecord,
-) -> (SimulationDate, CommandPriority, CommandId) {
+fn execution_key(record: &CommandExecutionRecord) -> (SimulationDate, CommandPriority, CommandId) {
     (
         record.executed_on,
         record.command.priority,
@@ -545,7 +539,8 @@ mod tests {
     #[test]
     fn metadata_and_binary_round_trip_exactly() {
         let snapshot = empty_snapshot(0xfedc_ba98_7654_3210);
-        let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
+        let bundle =
+            create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
         let metadata = bundle.metadata().expect("metadata should parse");
 
         assert_eq!(metadata.format_version, SAVE_FORMAT_VERSION);
