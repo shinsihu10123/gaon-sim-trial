@@ -1,3 +1,6 @@
+#[path = "terrain_topology.rs"]
+mod topology;
+
 use crate::WorldBounds;
 
 pub const TERRAIN_GRID_SIDE: u16 = 129;
@@ -115,6 +118,18 @@ impl TerrainState {
             .count()
     }
 
+    /// Derives the canonical drainage graph, basin IDs and river hierarchy.
+    #[must_use]
+    pub fn derive_hydrology(&self) -> TerrainHydrology {
+        topology::derive_terrain_hydrology(self)
+    }
+
+    /// Derives connected landmasses and the set of non-mainland island IDs.
+    #[must_use]
+    pub fn derive_landmasses(&self) -> TerrainLandmasses {
+        topology::derive_terrain_landmasses(self)
+    }
+
     /// Validates the fixed TEST terrain representation.
     ///
     /// # Errors
@@ -211,6 +226,7 @@ mod tests {
         let terrain = TerrainState::new_trial(ocean_samples()).expect("terrain should validate");
         assert_eq!(terrain.samples.len(), TERRAIN_SAMPLE_COUNT);
         assert_eq!(terrain.land_sample_count(), 0);
+        assert!(terrain.derive_landmasses().island_landmass_ids.is_empty());
     }
 
     #[test]
