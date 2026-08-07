@@ -1,19 +1,19 @@
 use simulation_model::{
-    MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldBounds,
-    WorldSpatialError, WorldSpatialState, TRIAL_REGION_COUNT,
+    EntityRegistry, MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface,
+    WorldBounds, WorldSpatialError, WorldSpatialState, TRIAL_REGION_COUNT,
 };
 
 fn line_regions(count: usize) -> Vec<RegionState> {
     (1..=count)
         .map(|index| {
-            let id = RegionId(u16::try_from(index).expect("fixture id fits u16"));
+            let id = RegionId(u64::try_from(index).expect("fixture id fits u64"));
             let x = i32::try_from(index).expect("fixture index fits i32") * 100;
             let mut neighbors = Vec::new();
             if index > 1 {
-                neighbors.push(RegionId(u16::try_from(index - 1).expect("id fits u16")));
+                neighbors.push(RegionId(u64::try_from(index - 1).expect("id fits u64")));
             }
             if index < count {
-                neighbors.push(RegionId(u16::try_from(index + 1).expect("id fits u16")));
+                neighbors.push(RegionId(u64::try_from(index + 1).expect("id fits u64")));
             }
             RegionState {
                 id,
