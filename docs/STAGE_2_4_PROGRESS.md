@@ -27,7 +27,7 @@ Status: **IN PROGRESS**
 - extraction-state round-trip regression added
 - Cargo lockfile refreshed and committed for the new workspace dev-dependency edge
 - strict Clippy model warnings corrected
-- resource quality intermediate-width overflow correction in progress
+- resource quality arithmetic widened to prevent debug overflow
 
 ## Remaining before PASS
 
