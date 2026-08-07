@@ -621,10 +621,7 @@ mod tests {
         assert_eq!(event.tick_index, 0);
         assert_eq!(event.category, EventCategory::UserIntervention);
         assert_eq!(event.source, EventSource::User);
-        assert_eq!(
-            event.payload,
-            EventPayload::CommandExecuted { command_id }
-        );
+        assert_eq!(event.payload, EventPayload::CommandExecuted { command_id });
     }
 
     #[test]
