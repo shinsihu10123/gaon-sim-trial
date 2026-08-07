@@ -37,19 +37,19 @@ impl WorldBounds {
     /// Returns [`WorldSpatialError::InvalidBounds`] when either axis has zero or
     /// negative extent.
     pub const fn new(
-        min_x_m: i32,
-        max_x_m: i32,
-        min_z_m: i32,
-        max_z_m: i32,
+        west_m: i32,
+        east_m: i32,
+        south_m: i32,
+        north_m: i32,
     ) -> Result<Self, WorldSpatialError> {
-        if min_x_m >= max_x_m || min_z_m >= max_z_m {
+        if west_m >= east_m || south_m >= north_m {
             return Err(WorldSpatialError::InvalidBounds);
         }
         Ok(Self {
-            min_x_m,
-            max_x_m,
-            min_z_m,
-            max_z_m,
+            min_x_m: west_m,
+            max_x_m: east_m,
+            min_z_m: south_m,
+            max_z_m: north_m,
         })
     }
 
@@ -101,7 +101,7 @@ impl RegionPoliticalState {
 ///
 /// Detailed elevation, biome, rivers, resources and infrastructure are added by
 /// later Stage 2 subsections; this type only establishes topology and political
-/// identity needed to attach those systems without changing RegionId semantics.
+/// identity needed to attach those systems without changing `RegionId` semantics.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RegionState {
     pub id: RegionId,
@@ -109,7 +109,7 @@ pub struct RegionState {
     pub center: MapPoint,
     /// Ordered polygon ring. The first point is not repeated at the end.
     pub boundary: Vec<MapPoint>,
-    /// Strictly ascending, unique RegionIds. Adjacency must be reciprocal.
+    /// Strictly ascending, unique `RegionIds`. Adjacency must be reciprocal.
     pub neighbors: Vec<RegionId>,
     pub political: RegionPoliticalState,
 }
@@ -169,6 +169,11 @@ impl WorldSpatialState {
     /// An entirely empty `(None, [])` state is the only valid uninitialized
     /// representation. Any initialized representation must contain exactly 60
     /// regions with IDs 1..=60 in vector order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorldSpatialError`] when initialization, region identity,
+    /// geometry, adjacency or political invariants are invalid.
     pub fn validate(&self) -> Result<(), WorldSpatialError> {
         match self.bounds {
             None => {
@@ -193,7 +198,9 @@ impl WorldSpatialState {
             });
         }
 
-        let bounds = self.bounds.expect("validated initialized bounds");
+        let Some(bounds) = self.bounds else {
+            return Err(WorldSpatialError::PartialInitialization);
+        };
 
         for (index, region) in self.regions.iter().enumerate() {
             let expected = u16::try_from(index + 1).expect("trial region count fits u16");
