@@ -146,6 +146,9 @@ impl SimulationEngine {
     /// Returns [`CommandError`] when a scheduled date is invalid, is already in
     /// the past, or no further deterministic command identifiers can be issued.
     pub fn submit_command(&mut self, request: CommandRequest) -> Result<CommandId, CommandError> {
+        if request.payload.is_entity_lifecycle() && request.source != CommandSource::System {
+            return Err(CommandError::InvalidSourceForPayload);
+        }
         let execute_on = self.resolve_execution_date(request.timing)?;
         let id = CommandId(self.next_command_id);
         self.next_command_id = self
@@ -254,23 +257,37 @@ impl SimulationEngine {
         let command_id = command.id;
         let command_source = command.source;
 
-        let lifecycle_event = self.apply_entity_payload(&command.payload).ok().flatten();
+        let lifecycle_result = self.apply_entity_payload(&command.payload);
 
         self.executed_commands.push(CommandExecutionRecord {
             command,
             executed_on,
         });
 
-        if let Some(payload) = lifecycle_event {
-            self.event_ledger.append(
-                executed_on,
-                self.state.elapsed_days,
-                EventDraft {
-                    category: EventCategory::EntityLifecycle,
-                    source: EventSource::System,
-                    payload,
-                },
-            );
+        match lifecycle_result {
+            Ok(Some(payload)) => {
+                self.event_ledger.append(
+                    executed_on,
+                    self.state.elapsed_days,
+                    EventDraft {
+                        category: EventCategory::EntityLifecycle,
+                        source: EventSource::System,
+                        payload,
+                    },
+                );
+            }
+            Ok(None) => {}
+            Err(error) => {
+                self.event_ledger.append(
+                    executed_on,
+                    self.state.elapsed_days,
+                    EventDraft {
+                        category: EventCategory::EntityLifecycle,
+                        source: EventSource::System,
+                        payload: EventPayload::EntityMutationRejected { error },
+                    },
+                );
+            }
         }
 
         let (category, source) = match command_source {

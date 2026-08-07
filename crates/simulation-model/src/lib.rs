@@ -196,6 +196,11 @@ pub enum CommandPayload {
 
 impl CommandPayload {
     #[must_use]
+    pub const fn is_entity_lifecycle(&self) -> bool {
+        !matches!(self, Self::NoOp { .. })
+    }
+
+    #[must_use]
     pub fn references_country(&self, country_id: CountryId) -> bool {
         match self {
             Self::RemoveCountryEntity {
@@ -312,6 +317,7 @@ pub enum CommandError {
         current: SimulationDate,
     },
     CommandIdExhausted,
+    InvalidSourceForPayload,
 }
 
 impl core::fmt::Display for CommandError {
@@ -333,6 +339,9 @@ impl core::fmt::Display for CommandError {
                 current.day
             ),
             Self::CommandIdExhausted => formatter.write_str("command identifier space exhausted"),
+            Self::InvalidSourceForPayload => {
+                formatter.write_str("entity lifecycle payloads require system command source")
+            }
         }
     }
 }

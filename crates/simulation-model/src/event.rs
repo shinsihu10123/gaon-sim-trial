@@ -1,4 +1,4 @@
-use crate::{CommandId, CountryId, EntityRef, SimulationDate};
+use crate::{CommandId, CountryId, EntityRef, EntityRegistryError, SimulationDate};
 
 /// Monotonic identifier assigned to an immutable world event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -33,6 +33,7 @@ pub enum EventPayload {
     CommandExecuted { command_id: CommandId },
     EntityCreated { entity: EntityRef },
     EntityRemoved { entity: EntityRef },
+    EntityMutationRejected { error: EntityRegistryError },
 }
 
 /// Immutable fact stored in the append-only Event Ledger.

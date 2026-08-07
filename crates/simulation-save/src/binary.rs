@@ -1,11 +1,11 @@
 use simulation_model::{
     BiomeClass, CityEntity, CityId, CityRegistry, CommandExecutionRecord, CommandId,
     CommandPayload, CommandPriority, CommandSource, CountryEntity, CountryId, CountryRegistry,
-    EntityKind, EntityRef, EntityRegistry, EntityWorldState, EventCategory, EventId, EventPayload,
-    EventRecord, EventSource, MapPoint, QueuedCommand, RegionDraft, RegionId, RegionPoliticalState,
-    RegionRegistry, RegionState, RegionSurface, ReliefClass, ResourceCellState, ResourceDeposit,
-    ResourceFieldState, SimulationDate, StableEntityId, TerrainSample, TerrainState, WorldBounds,
-    WorldSpatialState, WorldState,
+    EntityKind, EntityRef, EntityRegistry, EntityRegistryError, EntityWorldState, EventCategory,
+    EventId, EventPayload, EventRecord, EventSource, MapPoint, QueuedCommand, RegionDraft,
+    RegionId, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface, ReliefClass,
+    ResourceCellState, ResourceDeposit, ResourceFieldState, SimulationDate, StableEntityId,
+    TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -27,7 +27,7 @@ pub(crate) fn encode_snapshot(snapshot: &EngineSnapshot) -> Result<Vec<u8>, Save
         snapshot.pending_commands.len(),
     )?;
     for command in &snapshot.pending_commands {
-        write_queued_command(&mut bytes, command);
+        write_queued_command(&mut bytes, command)?;
     }
 
     write_count(
@@ -36,7 +36,7 @@ pub(crate) fn encode_snapshot(snapshot: &EngineSnapshot) -> Result<Vec<u8>, Save
         snapshot.executed_commands.len(),
     )?;
     for record in &snapshot.executed_commands {
-        write_execution_record(&mut bytes, record);
+        write_execution_record(&mut bytes, record)?;
     }
 
     write_count(&mut bytes, "events", snapshot.events.len())?;
@@ -565,13 +565,14 @@ fn read_region_draft(cursor: &mut Cursor<'_>) -> Result<RegionDraft, SaveError> 
     })
 }
 
-fn write_queued_command(bytes: &mut Vec<u8>, command: &QueuedCommand) {
+fn write_queued_command(bytes: &mut Vec<u8>, command: &QueuedCommand) -> Result<(), SaveError> {
     write_u64(bytes, command.id.0);
     write_command_source(bytes, command.source);
     write_date(bytes, command.submitted_on);
     write_date(bytes, command.execute_on);
     write_command_priority(bytes, command.priority);
-    write_command_payload(bytes, &command.payload);
+    write_command_payload(bytes, &command.payload)?;
+    Ok(())
 }
 
 fn read_queued_command(cursor: &mut Cursor<'_>) -> Result<QueuedCommand, SaveError> {
@@ -585,9 +586,13 @@ fn read_queued_command(cursor: &mut Cursor<'_>) -> Result<QueuedCommand, SaveErr
     })
 }
 
-fn write_execution_record(bytes: &mut Vec<u8>, record: &CommandExecutionRecord) {
-    write_queued_command(bytes, &record.command);
+fn write_execution_record(
+    bytes: &mut Vec<u8>,
+    record: &CommandExecutionRecord,
+) -> Result<(), SaveError> {
+    write_queued_command(bytes, &record.command)?;
     write_date(bytes, record.executed_on);
+    Ok(())
 }
 
 fn read_execution_record(cursor: &mut Cursor<'_>) -> Result<CommandExecutionRecord, SaveError> {
@@ -661,7 +666,7 @@ fn read_command_priority(cursor: &mut Cursor<'_>) -> Result<CommandPriority, Sav
     }
 }
 
-fn write_command_payload(bytes: &mut Vec<u8>, payload: &CommandPayload) {
+fn write_command_payload(bytes: &mut Vec<u8>, payload: &CommandPayload) -> Result<(), SaveError> {
     match payload {
         CommandPayload::NoOp { token } => {
             write_u8(bytes, 0);
@@ -686,13 +691,14 @@ fn write_command_payload(bytes: &mut Vec<u8>, payload: &CommandPayload) {
         }
         CommandPayload::CreateRegionEntity { draft } => {
             write_u8(bytes, 5);
-            let _ = write_region_draft(bytes, draft);
+            write_region_draft(bytes, draft)?;
         }
         CommandPayload::RemoveRegionEntity { region_id } => {
             write_u8(bytes, 6);
             write_u64(bytes, region_id.0);
         }
     }
+    Ok(())
 }
 
 fn read_command_payload(cursor: &mut Cursor<'_>) -> Result<CommandPayload, SaveError> {
@@ -796,6 +802,41 @@ fn write_event_payload(bytes: &mut Vec<u8>, payload: EventPayload) {
             write_u8(bytes, 2);
             write_entity_ref(bytes, entity);
         }
+        EventPayload::EntityMutationRejected { error } => {
+            write_u8(bytes, 3);
+            write_entity_registry_error(bytes, error);
+        }
+    }
+}
+
+fn write_entity_registry_error(bytes: &mut Vec<u8>, error: EntityRegistryError) {
+    write_u8(
+        bytes,
+        match error {
+            EntityRegistryError::InvalidId => 0,
+            EntityRegistryError::DuplicateId => 1,
+            EntityRegistryError::NonMonotonicNextId => 2,
+            EntityRegistryError::IdExhausted => 3,
+            EntityRegistryError::UnknownEntity => 4,
+            EntityRegistryError::ReferenceInUse => 5,
+            EntityRegistryError::InvalidReference => 6,
+        },
+    );
+}
+
+fn read_entity_registry_error(cursor: &mut Cursor<'_>) -> Result<EntityRegistryError, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(EntityRegistryError::InvalidId),
+        1 => Ok(EntityRegistryError::DuplicateId),
+        2 => Ok(EntityRegistryError::NonMonotonicNextId),
+        3 => Ok(EntityRegistryError::IdExhausted),
+        4 => Ok(EntityRegistryError::UnknownEntity),
+        5 => Ok(EntityRegistryError::ReferenceInUse),
+        6 => Ok(EntityRegistryError::InvalidReference),
+        tag => Err(SaveError::InvalidTag {
+            field: "entity registry error",
+            tag,
+        }),
     }
 }
 
@@ -840,6 +881,9 @@ fn read_event_payload(cursor: &mut Cursor<'_>) -> Result<EventPayload, SaveError
         }),
         2 => Ok(EventPayload::EntityRemoved {
             entity: read_entity_ref(cursor)?,
+        }),
+        3 => Ok(EventPayload::EntityMutationRejected {
+            error: read_entity_registry_error(cursor)?,
         }),
         tag => Err(SaveError::InvalidTag {
             field: "event payload",

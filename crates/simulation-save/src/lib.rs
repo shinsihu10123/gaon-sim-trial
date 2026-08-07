@@ -460,6 +460,15 @@ fn validate_events(
                     ));
                 }
             }
+            EventPayload::EntityMutationRejected { .. } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity mutation rejection attribution is invalid",
+                    ));
+                }
+            }
         }
     }
 
