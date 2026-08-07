@@ -12,8 +12,12 @@ Status: **IN PROGRESS**
 - Deterministic sea-threshold calibration
 - Forced continuous outer ocean
 - Relief and biome classification
-- Save format v3 terrain serialization
-- RenderSnapshot v2 terrain arrays
+- Deterministic adjacent-slope limiter
+- Seed-derived island generation and landmass topology
+- Deterministic downstream routing, drainage-basin IDs and flow accumulation
+- River-order derivation
+- Save format v4 migration in progress for derived geography
+- RenderSnapshot v3 migration in progress for hydrology/landmass arrays
 - Browser WASM terrain bootstrap
 - Headless terrain replay reconstruction
 - Three.js authoritative heightfield and sea-level mesh
@@ -22,15 +26,15 @@ Status: **IN PROGRESS**
 
 ## Validation status
 
-- rustfmt: normalized
-- strict Clippy: pending
-- complete Rust workspace tests: pending
-- headless deterministic regression: pending
+- rustfmt: pending after hydrology schema migration
+- strict Clippy: pending after hydrology schema migration
+- complete Rust workspace tests: pending after hydrology schema migration
+- headless deterministic regression: pending after hydrology schema migration
 - locked Cargo graph verification: pending
 - actual browser WASM build: pending
 - npm ci: pending
 - TypeScript typecheck: pending
 - Vite production build: pending
 - Stage 2.1 regression contract: pending
-- Stage 2.2 terrain contract: pending
+- Stage 2.2 terrain/hydrology contract: pending
 - final evidence and acceptance: pending
