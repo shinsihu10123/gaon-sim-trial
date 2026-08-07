@@ -1,0 +1,45 @@
+name: Bootstrap source from v1.2 bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/bootstrap-from-bundle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout remote baseline
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode archived Git bundle
+        shell: bash
+        run: |
+          base64 --decode backups/gaon-sim-trial-v1.2.bundle.b64 > "$RUNNER_TEMP/gaon-sim-trial-v1.2.bundle"
+          echo '2eb951e31f4989bb9b0984ebc64e16da165ba0f340ea2454f8cf29e9b239ffcd  '"$RUNNER_TEMP/gaon-sim-trial-v1.2.bundle" | sha256sum --check
+
+      - name: Restore v1.2 source tree
+        shell: bash
+        run: |
+          git clone "$RUNNER_TEMP/gaon-sim-trial-v1.2.bundle" "$RUNNER_TEMP/gaon-restored"
+          rsync -a --exclude='.git' --exclude='backups_tmp/' "$RUNNER_TEMP/gaon-restored/" ./
+
+      - name: Commit restored source tree
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No source changes to import.'
+            exit 0
+          fi
+          git commit -m 'bootstrap: restore v1.2 source tree'
+          git push origin HEAD:main
