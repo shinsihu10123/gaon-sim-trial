@@ -482,6 +482,9 @@ fn validate_command_event_attribution(
     command_source: CommandSource,
 ) -> Result<(), SaveError> {
     let valid = match command_source {
+        CommandSource::System => {
+            event.category == EventCategory::System && event.source == EventSource::System
+        }
         CommandSource::User => {
             event.category == EventCategory::UserIntervention && event.source == EventSource::User
         }
