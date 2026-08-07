@@ -47,3 +47,8 @@ if (!doc.includes("(execution date, priority lane, command id)")) {
 }
 
 console.log("Stage 1.3 command contract verified");
+
+// The base CI workflow invokes this script. Importing the Stage 1.4 contract
+// here makes feature-branch pull requests validate both contracts without
+// requiring an unreviewed workflow change on the base branch.
+await import("./check-event-contract.mjs");
