@@ -28,10 +28,10 @@ Status: **IN PROGRESS**
 
 ## Validation status
 
-- rustfmt: normalization triggered
-- strict Clippy: pending after formatting
-- complete Rust workspace tests: pending after formatting
-- headless deterministic regression: pending after formatting
+- rustfmt: normalized
+- strict Clippy: running on normalized head
+- complete Rust workspace tests: pending
+- headless deterministic regression: pending
 - locked Cargo graph verification: pending
 - actual browser WASM build: pending
 - npm ci: pending
