@@ -39,8 +39,12 @@ if (!bridge.includes("new Worker(new URL")) {
 if (viewerPackage.dependencies?.three === undefined) {
   throw new Error("Three.js dependency missing");
 }
-if (viewerPackage.devDependencies?.vite === undefined || viewerPackage.devDependencies?.typescript === undefined) {
+if (
+  viewerPackage.devDependencies?.vite === undefined ||
+  viewerPackage.devDependencies?.typescript === undefined
+) {
   throw new Error("Vite/TypeScript development dependencies missing");
 }
 
 console.log("Stage 1.1 browser ownership contract verified");
+await import("./check-world-data-contract.mjs");
