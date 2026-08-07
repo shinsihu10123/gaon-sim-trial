@@ -34,11 +34,9 @@ Current integration gate:
 - Save v5 migration includes Registry allocator state and u64 IDs
 - lifecycle facts are represented in Event Ledger payloads
 - RenderSnapshot crosses the JS boundary with decimal-string entity IDs
-- rustfmt and model-level strict Clippy findings are resolved
-- Save validation recognizes System command attribution
-- Save registry iteration/import findings are corrected
-- spatial canonical, binary codec, protocol and world-spatial test fixtures now use u64 Stable IDs
-- protocol verifies decimal-string RenderSnapshot IDs
-- permanent Core/Viewer CI is proceeding toward full tests and headless replay
+- rustfmt and strict Clippy are green through the integrated workspace
+- all legacy u16 Region test fixtures have been migrated to u64 Stable IDs
+- the first actual workspace test failure was a corrected topology expectation, not a runtime defect
+- permanent Core/Viewer CI is rerunning full tests and headless replay on the corrected head
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
