@@ -91,7 +91,7 @@ mod tests {
         let separate_land_exists = elevations.iter().enumerate().any(|(index, &elevation)| {
             let x = index % side;
             let z = index / side;
-            elevation >= 0 && !(10..=14).contains(&x) && !(10..=14).contains(&z)
+            elevation >= 0 && !((10..=14).contains(&x) && (10..=14).contains(&z))
         });
         assert!(separate_land_exists);
     }
