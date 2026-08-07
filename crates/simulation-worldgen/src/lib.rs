@@ -13,6 +13,7 @@ const RIDGE_SALT: u64 = 0x5249_4447_4500_0001;
 const MOISTURE_SALT_1: u64 = 0x4d4f_4953_5400_0001;
 const MOISTURE_SALT_2: u64 = 0x4d4f_4953_5400_0002;
 const Q16_MAX: i64 = 65_535;
+const MAX_NEIGHBOR_ELEVATION_DELTA_M: i32 = 3_000;
 
 /// Generates the canonical TEST terrain from a world seed.
 ///
@@ -74,6 +75,8 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
         }));
     }
 
+    limit_neighbor_elevation_delta(&mut elevations, side);
+
     let mut samples = Vec::with_capacity(TERRAIN_SAMPLE_COUNT);
     for index in 0..TERRAIN_SAMPLE_COUNT {
         let elevation = elevations[index];
@@ -90,6 +93,43 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
     }
 
     TerrainState::new_trial(samples)
+}
+
+fn limit_neighbor_elevation_delta(elevations: &mut [i16], side: usize) {
+    loop {
+        let mut changed = false;
+        for z in 0..side {
+            for x in 0..side {
+                let index = z * side + x;
+                if x + 1 < side {
+                    changed |= lower_excessive_peak(elevations, index, index + 1);
+                }
+                if z + 1 < side {
+                    changed |= lower_excessive_peak(elevations, index, index + side);
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+}
+
+fn lower_excessive_peak(elevations: &mut [i16], first_index: usize, second_index: usize) -> bool {
+    let first = i32::from(elevations[first_index]);
+    let second = i32::from(elevations[second_index]);
+
+    if first > second + MAX_NEIGHBOR_ELEVATION_DELTA_M {
+        elevations[first_index] =
+            i16::try_from(second + MAX_NEIGHBOR_ELEVATION_DELTA_M).unwrap_or(i16::MAX);
+        true
+    } else if second > first + MAX_NEIGHBOR_ELEVATION_DELTA_M {
+        elevations[second_index] =
+            i16::try_from(first + MAX_NEIGHBOR_ELEVATION_DELTA_M).unwrap_or(i16::MAX);
+        true
+    } else {
+        false
+    }
 }
 
 fn raw_continental_signal(seed: u64, x: u16, z: u16) -> i32 {
@@ -241,7 +281,7 @@ mod tests {
 
     use simulation_model::{BiomeClass, ReliefClass, TERRAIN_GRID_SIDE, TERRAIN_SAMPLE_COUNT};
 
-    use super::generate_trial_terrain;
+    use super::{generate_trial_terrain, MAX_NEIGHBOR_ELEVATION_DELTA_M};
 
     #[test]
     fn same_seed_generates_identical_terrain() {
@@ -310,23 +350,25 @@ mod tests {
     }
 
     #[test]
-    fn canonical_seed_limits_neighbor_elevation_discontinuity() {
-        let terrain = generate_trial_terrain(2026).expect("terrain should generate");
+    fn representative_seeds_limit_neighbor_elevation_discontinuity() {
         let side = usize::from(TERRAIN_GRID_SIDE);
-        let mut maximum_delta = 0_i32;
-        for z in 0..side {
-            for x in 0..side {
-                let current = i32::from(terrain.samples[z * side + x].elevation_m);
-                if x + 1 < side {
-                    let east = i32::from(terrain.samples[z * side + x + 1].elevation_m);
-                    maximum_delta = maximum_delta.max((current - east).abs());
-                }
-                if z + 1 < side {
-                    let south = i32::from(terrain.samples[(z + 1) * side + x].elevation_m);
-                    maximum_delta = maximum_delta.max((current - south).abs());
+        for seed in [1, 2026, 2027, u64::MAX] {
+            let terrain = generate_trial_terrain(seed).expect("terrain should generate");
+            let mut maximum_delta = 0_i32;
+            for z in 0..side {
+                for x in 0..side {
+                    let current = i32::from(terrain.samples[z * side + x].elevation_m);
+                    if x + 1 < side {
+                        let east = i32::from(terrain.samples[z * side + x + 1].elevation_m);
+                        maximum_delta = maximum_delta.max((current - east).abs());
+                    }
+                    if z + 1 < side {
+                        let south = i32::from(terrain.samples[(z + 1) * side + x].elevation_m);
+                        maximum_delta = maximum_delta.max((current - south).abs());
+                    }
                 }
             }
+            assert!(maximum_delta <= MAX_NEIGHBOR_ELEVATION_DELTA_M);
         }
-        assert!(maximum_delta <= 3_500);
     }
 }
