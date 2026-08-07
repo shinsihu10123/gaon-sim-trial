@@ -203,7 +203,11 @@ impl WorldSpatialState {
         };
 
         for (index, region) in self.regions.iter().enumerate() {
-            let expected = u16::try_from(index + 1).expect("trial region count fits u16");
+            let Ok(expected) = u16::try_from(index + 1) else {
+                return Err(WorldSpatialError::WrongRegionCount {
+                    found: self.regions.len(),
+                });
+            };
             if region.id != RegionId(expected) {
                 return Err(WorldSpatialError::NonCanonicalRegionId {
                     expected: RegionId(expected),
