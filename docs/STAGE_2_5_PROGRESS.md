@@ -29,8 +29,11 @@ Implementation direction:
 Current integration gate:
 
 - model registries and Region Registry are present
-- lifecycle execution module is present
-- PR-level migration is wiring Command, Save v5, binary codec and RenderSnapshot contracts
-- permanent Core/Viewer CI will determine the next remediation steps
+- Region removal is atomic and surviving IDs are not renumbered
+- lifecycle execution is routed through deterministic System Commands
+- Save v5 migration includes Registry allocator state and u64 IDs
+- lifecycle facts are represented in Event Ledger payloads
+- RenderSnapshot crosses the JS boundary with decimal-string entity IDs
+- permanent Core/Viewer CI is now validating the integrated head
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
