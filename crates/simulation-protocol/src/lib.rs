@@ -153,7 +153,7 @@ impl From<MapPoint> for RenderMapPoint {
 #[cfg(test)]
 mod tests {
     use simulation_model::{
-        MapPoint, RegionPoliticalState, RegionState, RegionSurface, RegionId, WorldBounds,
+        MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldBounds,
         WorldSpatialState, WorldState, TRIAL_REGION_COUNT,
     };
 
