@@ -65,26 +65,27 @@ pub struct EventFilter {
 impl EventFilter {
     #[must_use]
     pub fn matches(self, event: &EventRecord) -> bool {
-        if let Some(category) = self.category
-            && event.category != category
+        if self
+            .category
+            .is_some_and(|category| event.category != category)
         {
             return false;
         }
 
-        if let Some(source) = self.source
-            && event.source != source
+        if self.source.is_some_and(|source| event.source != source) {
+            return false;
+        }
+
+        if self
+            .from_date
+            .is_some_and(|from_date| event.occurred_on < from_date)
         {
             return false;
         }
 
-        if let Some(from_date) = self.from_date
-            && event.occurred_on < from_date
-        {
-            return false;
-        }
-
-        if let Some(through_date) = self.through_date
-            && event.occurred_on > through_date
+        if self
+            .through_date
+            .is_some_and(|through_date| event.occurred_on > through_date)
         {
             return false;
         }
