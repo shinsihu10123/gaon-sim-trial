@@ -55,6 +55,10 @@ The current binary save codec already writes a dynamic Region count before seria
 
 The RenderSnapshot protocol already maps `world.spatial.regions.iter()` into a variable-length `Vec<RenderRegionSnapshot>`.
 
+## Validation notes
+
+The first permanent Core CI attempt stopped at formatting only. After rustfmt normalization, the next Core attempt passed format and found one strict-Clippy documentation requirement on the backward-compatible `new_trial` Result-returning API. The API documentation is being corrected without changing behavior before the full test gate is re-run.
+
 ## Completion gate
 
 The three re-review items return to PASS only after:
