@@ -43,12 +43,12 @@ fn derive_landmasses_from_elevations(elevations: &[i16], side: usize) -> Terrain
 
         let id = next_id;
         next_id = next_id.saturating_add(1);
-        let mut size = 0_usize;
+        let mut component_size = 0_usize;
         let mut queue = VecDeque::from([start]);
         landmass_ids[start] = id;
 
         while let Some(index) = queue.pop_front() {
-            size += 1;
+            component_size += 1;
             let x = index % side;
             let z = index / side;
             for neighbor in neighbor_indices(x, z, side) {
@@ -58,7 +58,7 @@ fn derive_landmasses_from_elevations(elevations: &[i16], side: usize) -> Terrain
                 }
             }
         }
-        component_sizes.push((id, size));
+        component_sizes.push((id, component_size));
     }
 
     let mainland_id = component_sizes
@@ -68,8 +68,7 @@ fn derive_landmasses_from_elevations(elevations: &[i16], side: usize) -> Terrain
                 .cmp(right_size)
                 .then_with(|| right_id.cmp(left_id))
         })
-        .map(|(id, _)| *id)
-        .unwrap_or(0);
+        .map_or(0, |(id, _)| *id);
     let island_landmass_ids = component_sizes
         .iter()
         .filter_map(|(id, _)| (*id != mainland_id).then_some(*id))
@@ -97,9 +96,14 @@ fn derive_hydrology_from_elevations(elevations: &[i16], side: usize) -> TerrainH
             if candidate >= current {
                 continue;
             }
-            if best.is_none_or(|(best_elevation, best_index)| {
-                candidate < best_elevation || (candidate == best_elevation && neighbor < best_index)
-            }) {
+            let replaces_best = match best {
+                None => true,
+                Some((best_elevation, best_index)) => {
+                    candidate < best_elevation
+                        || (candidate == best_elevation && neighbor < best_index)
+                }
+            };
+            if replaces_best {
                 best = Some((candidate, neighbor));
             }
         }
@@ -110,7 +114,7 @@ fn derive_hydrology_from_elevations(elevations: &[i16], side: usize) -> TerrainH
 
     let mut flow_accumulation = elevations
         .iter()
-        .map(|&elevation| if elevation >= 0 { 1_u32 } else { 0_u32 })
+        .map(|&elevation| u32::from(elevation >= 0))
         .collect::<Vec<_>>();
     let mut descending = (0..elevations.len())
         .filter(|&index| elevations[index] >= 0)
@@ -187,7 +191,11 @@ fn terminal_key(index: usize, elevations: &[i16], downstream_indices: &[u32]) ->
         let Ok(next) = usize::try_from(downstream) else {
             return elevations.len() + current;
         };
-        if elevations.get(next).is_none_or(|&elevation| elevation < 0) {
+        let reaches_ocean_or_invalid = match elevations.get(next) {
+            None => true,
+            Some(&elevation) => elevation < 0,
+        };
+        if reaches_ocean_or_invalid {
             return next;
         }
         current = next;
