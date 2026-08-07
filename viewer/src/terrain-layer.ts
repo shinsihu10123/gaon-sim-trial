@@ -3,10 +3,12 @@ import type { RenderTerrainSnapshot, RenderWorldBounds } from "./types";
 
 const WORLD_DISPLAY_SIZE = 80;
 const VERTICAL_EXAGGERATION = 8;
+const NO_DOWNSTREAM_INDEX = 0xffffffff;
 
 export class TerrainLayer {
   private terrainMesh: THREE.Mesh | undefined;
   private seaMesh: THREE.Mesh | undefined;
+  private riverLines: THREE.LineSegments | undefined;
 
   public constructor(private readonly scene: THREE.Scene) {}
 
@@ -20,7 +22,12 @@ export class TerrainLayer {
     if (
       terrain.elevationM.length !== sampleCount ||
       terrain.biomeCodes.length !== sampleCount ||
-      terrain.reliefCodes.length !== sampleCount
+      terrain.reliefCodes.length !== sampleCount ||
+      terrain.downstreamIndices.length !== sampleCount ||
+      terrain.drainageBasinIds.length !== sampleCount ||
+      terrain.flowAccumulation.length !== sampleCount ||
+      terrain.riverOrders.length !== sampleCount ||
+      terrain.landmassIds.length !== sampleCount
     ) {
       throw new Error("terrain snapshot arrays do not match grid dimensions");
     }
@@ -96,6 +103,11 @@ export class TerrainLayer {
     this.seaMesh.position.y = terrain.seaLevelM * verticalScale + 0.015;
     this.seaMesh.name = "authoritative-sea-level";
     this.scene.add(this.seaMesh);
+
+    this.riverLines = buildRiverLines(terrain, positions);
+    if (this.riverLines !== undefined) {
+      this.scene.add(this.riverLines);
+    }
   }
 
   public dispose(): void {
@@ -115,7 +127,62 @@ export class TerrainLayer {
       disposeMaterial(this.seaMesh.material);
       this.seaMesh = undefined;
     }
+    if (this.riverLines !== undefined) {
+      this.riverLines.removeFromParent();
+      this.riverLines.geometry.dispose();
+      disposeMaterial(this.riverLines.material);
+      this.riverLines = undefined;
+    }
   }
+}
+
+function buildRiverLines(
+  terrain: RenderTerrainSnapshot,
+  positions: Float32Array,
+): THREE.LineSegments | undefined {
+  const segments: number[] = [];
+  for (let index = 0; index < terrain.riverOrders.length; index += 1) {
+    if (terrain.riverOrders[index] === 0) {
+      continue;
+    }
+
+    const downstream = terrain.downstreamIndices[index];
+    if (
+      downstream === NO_DOWNSTREAM_INDEX ||
+      !Number.isInteger(downstream) ||
+      downstream < 0 ||
+      downstream >= terrain.riverOrders.length
+    ) {
+      continue;
+    }
+
+    const sourceOffset = index * 3;
+    const targetOffset = downstream * 3;
+    segments.push(
+      positions[sourceOffset],
+      positions[sourceOffset + 1] + 0.025,
+      positions[sourceOffset + 2],
+      positions[targetOffset],
+      positions[targetOffset + 1] + 0.025,
+      positions[targetOffset + 2],
+    );
+  }
+
+  if (segments.length === 0) {
+    return undefined;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(segments, 3));
+  const material = new THREE.LineBasicMaterial({
+    color: 0x5f8fa8,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const lines = new THREE.LineSegments(geometry, material);
+  lines.name = "authoritative-river-network";
+  lines.renderOrder = 3;
+  return lines;
 }
 
 function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
