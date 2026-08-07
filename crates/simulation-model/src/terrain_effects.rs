@@ -146,7 +146,11 @@ fn agriculture_yield(sample: &crate::TerrainSample, river_order: u8) -> u16 {
     let moisture_distance = i32::from(sample.moisture_permille).abs_diff(550);
     let moisture_bonus = 300_i32 - i32::try_from(moisture_distance / 2).unwrap_or(300);
     let river_bonus = i32::from(river_order) * 55;
-    clamp_u16(biome_base + relief_adjustment + moisture_bonus.max(0) + river_bonus, 0, 1_400)
+    clamp_u16(
+        biome_base + relief_adjustment + moisture_bonus.max(0) + river_bonus,
+        0,
+        1_400,
+    )
 }
 
 fn construction_cost(sample: &crate::TerrainSample) -> u16 {
@@ -216,7 +220,11 @@ fn port_feasibility(sample: &crate::TerrainSample, river_mouth: bool) -> u16 {
     } else {
         0
     };
-    clamp_u16(700 + low_elevation_bonus + river_mouth_bonus - wetland_penalty, 0, 1_000)
+    clamp_u16(
+        700 + low_elevation_bonus + river_mouth_bonus - wetland_penalty,
+        0,
+        1_000,
+    )
 }
 
 fn carrying_capacity(sample: &crate::TerrainSample, agriculture: u16, river_order: u8) -> u16 {
@@ -227,7 +235,9 @@ fn carrying_capacity(sample: &crate::TerrainSample, agriculture: u16, river_orde
     };
     let river_bonus = u16::from(river_order) * 10;
     let altitude_penalty = if sample.elevation_m > 2_000 { 40 } else { 0 };
-    let raw = 10_i32 + i32::from(agriculture) / 6 + i32::from(coast_bonus)
+    let raw = 10_i32
+        + i32::from(agriculture) / 6
+        + i32::from(coast_bonus)
         + i32::from(river_bonus)
         - altitude_penalty;
     clamp_u16(raw, 5, 280)
