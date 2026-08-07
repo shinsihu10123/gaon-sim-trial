@@ -25,7 +25,7 @@ Status: **IN PROGRESS**
 - save format v4, binary codec, WASM and headless initialization wired
 - canonical digest includes resource stocks through authoritative binary serialization
 - extraction-state round-trip regression added
-- Cargo lockfile refresh in progress for the new workspace dev-dependency edge
+- Cargo lockfile refreshed and committed for the new workspace dev-dependency edge
 
 ## Remaining before PASS
 
