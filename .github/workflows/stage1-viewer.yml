@@ -1,0 +1,36 @@
+name: Stage 1 Viewer CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  viewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+      - name: Verify locked Rust workspace
+        run: cargo check --locked --workspace
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked --version 0.13.1
+      - name: Build Rust WASM adapter
+        run: wasm-pack build crates/simulation-wasm --target web --out-dir ../../viewer/src/generated/wasm --out-name simulation_wasm --release
+      - name: Install Viewer dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix viewer
+      - name: Typecheck Viewer
+        run: npm run typecheck --prefix viewer
+      - name: Build Viewer
+        run: npm run build --prefix viewer
+      - name: Verify Stage 1.1 ownership contract
+        run: node scripts/check-viewer-contract.mjs
