@@ -20,11 +20,10 @@ Status: **IN PROGRESS**
 
 ## Integration now being applied
 
-- expose resource model through `simulation-model` public API
-- add authoritative resource field to `WorldState`
-- migrate save format to v4 with exact remaining-stock serialization
-- include resource state in canonical digest through authoritative binary
-- initialize identical terrain/resource state in headless and WASM entry paths
+- resource model exposed through `simulation-model` public API
+- authoritative resource field added to `WorldState`
+- one-shot integration is wiring save format v4, binary codec, WASM and headless entry paths
+- canonical digest will include resource stocks through authoritative binary serialization
 
 ## Remaining before PASS
 
