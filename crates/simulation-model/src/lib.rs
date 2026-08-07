@@ -8,8 +8,7 @@ pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, 
 pub use terrain::{
     trial_terrain_bounds, BiomeClass, ReliefClass, TerrainError, TerrainHydrology,
     TerrainLandmasses, TerrainSample, TerrainState, NO_DOWNSTREAM_INDEX, TERRAIN_GRID_SIDE,
-    TERRAIN_GRID_SPACING_M, TERRAIN_SAMPLE_COUNT, TERRAIN_SEA_LEVEL_M,
-    TRIAL_WORLD_HALF_EXTENT_M,
+    TERRAIN_GRID_SPACING_M, TERRAIN_SAMPLE_COUNT, TERRAIN_SEA_LEVEL_M, TRIAL_WORLD_HALF_EXTENT_M,
 };
 pub use world::{
     MapPoint, RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialError,

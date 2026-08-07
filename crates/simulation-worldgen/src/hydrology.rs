@@ -21,8 +21,10 @@ pub(super) fn ensure_seeded_island(elevations: &mut [i16], side: usize, seed: u6
 
         for delta_z in -2_i32..=2 {
             for delta_x in -2_i32..=2 {
-                let target_x = usize::try_from(i32::try_from(x).unwrap_or(0) + delta_x).unwrap_or(x);
-                let target_z = usize::try_from(i32::try_from(z).unwrap_or(0) + delta_z).unwrap_or(z);
+                let target_x =
+                    usize::try_from(i32::try_from(x).unwrap_or(0) + delta_x).unwrap_or(x);
+                let target_z =
+                    usize::try_from(i32::try_from(z).unwrap_or(0) + delta_z).unwrap_or(z);
                 let target = target_z * side + target_x;
                 elevations[target] = elevations[target].min(-120);
             }
@@ -30,8 +32,10 @@ pub(super) fn ensure_seeded_island(elevations: &mut [i16], side: usize, seed: u6
 
         for delta_z in -1_i32..=1 {
             for delta_x in -1_i32..=1 {
-                let target_x = usize::try_from(i32::try_from(x).unwrap_or(0) + delta_x).unwrap_or(x);
-                let target_z = usize::try_from(i32::try_from(z).unwrap_or(0) + delta_z).unwrap_or(z);
+                let target_x =
+                    usize::try_from(i32::try_from(x).unwrap_or(0) + delta_x).unwrap_or(x);
+                let target_z =
+                    usize::try_from(i32::try_from(z).unwrap_or(0) + delta_z).unwrap_or(z);
                 let target = target_z * side + target_x;
                 elevations[target] = if delta_x == 0 && delta_z == 0 {
                     320
@@ -87,7 +91,10 @@ mod tests {
         assert!(ensure_seeded_island(&mut elevations, side, 7));
 
         let _type_anchor: Option<TerrainState> = None;
-        let land_count = elevations.iter().filter(|&&elevation| elevation >= 0).count();
+        let land_count = elevations
+            .iter()
+            .filter(|&&elevation| elevation >= 0)
+            .count();
         assert!(land_count > 25);
     }
 }

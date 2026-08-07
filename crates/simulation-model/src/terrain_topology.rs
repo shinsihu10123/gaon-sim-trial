@@ -133,8 +133,8 @@ fn derive_hydrology_from_elevations(elevations: &[i16], side: usize) -> TerrainH
             .get(downstream_index)
             .is_some_and(|&elevation| elevation >= 0)
         {
-            flow_accumulation[downstream_index] = flow_accumulation[downstream_index]
-                .saturating_add(flow_accumulation[index]);
+            flow_accumulation[downstream_index] =
+                flow_accumulation[downstream_index].saturating_add(flow_accumulation[index]);
         }
     }
 
@@ -212,9 +212,7 @@ fn neighbor_indices(x: usize, z: usize, side: usize) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        BiomeClass, ReliefClass, TerrainSample, TerrainState, TERRAIN_SAMPLE_COUNT,
-    };
+    use crate::{BiomeClass, ReliefClass, TerrainSample, TerrainState, TERRAIN_SAMPLE_COUNT};
 
     use super::{derive_terrain_hydrology, derive_terrain_landmasses};
 

@@ -310,8 +310,14 @@ mod tests {
         let first = generate_trial_terrain(2026).expect("terrain should generate");
         let second = generate_trial_terrain(2026).expect("terrain should generate");
         assert_eq!(first, second);
-        assert_eq!(derive_trial_hydrology(&first), derive_trial_hydrology(&second));
-        assert_eq!(derive_trial_landmasses(&first), derive_trial_landmasses(&second));
+        assert_eq!(
+            derive_trial_hydrology(&first),
+            derive_trial_hydrology(&second)
+        );
+        assert_eq!(
+            derive_trial_landmasses(&first),
+            derive_trial_landmasses(&second)
+        );
     }
 
     #[test]
