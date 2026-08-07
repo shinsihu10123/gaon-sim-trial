@@ -1,11 +1,16 @@
 #![forbid(unsafe_code)]
 
+mod entity;
 mod event;
 mod resources;
 mod terrain;
 mod terrain_effects;
 mod world;
 
+pub use entity::{
+    CityEntity, CityId, CityRegistry, CountryEntity, CountryId, CountryRegistry, EntityKind,
+    EntityRef, EntityRegistry, EntityRegistryError, EntityWorldState, RegionId, StableEntityId,
+};
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
 pub use resources::{
     food_capacity_from_terrain_effects, ExtractionResult, ResourceAggregate, ResourceCellState,
@@ -18,17 +23,9 @@ pub use terrain::{
 };
 pub use terrain_effects::{derive_terrain_effects, TerrainEffectField, TerrainEffects};
 pub use world::{
-    MapPoint, RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialError,
-    WorldSpatialState, TRIAL_REGION_COUNT,
+    MapPoint, RegionDraft, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface,
+    WorldBounds, WorldSpatialError, WorldSpatialState, TRIAL_REGION_COUNT,
 };
-
-/// Stable identifier for a country in the trial simulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CountryId(pub u16);
-
-/// Stable identifier for a region in the trial simulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RegionId(pub u16);
 
 /// Calendar boundary information produced after one simulated day advances.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -273,6 +270,7 @@ pub struct WorldState {
     pub terrain: Option<TerrainState>,
     pub resources: Option<ResourceFieldState>,
     pub spatial: WorldSpatialState,
+    pub entities: EntityWorldState,
 }
 
 impl WorldState {
@@ -285,6 +283,10 @@ impl WorldState {
             terrain: None,
             resources: None,
             spatial: WorldSpatialState::uninitialized(),
+            entities: EntityWorldState {
+                countries: CountryRegistry::new(),
+                cities: CityRegistry::new(),
+            },
         }
     }
 }
@@ -293,7 +295,7 @@ impl WorldState {
 mod tests {
     use super::{
         CommandPayload, CommandPriority, CommandRequest, CommandSource, CommandTiming, CountryId,
-        DateBoundary, SimulationDate, WorldState,
+        DateBoundary, EntityRegistry, SimulationDate, WorldState,
     };
 
     #[test]
@@ -306,6 +308,8 @@ mod tests {
         assert!(world.resources.is_none());
         assert!(!world.spatial.is_initialized());
         assert!(world.spatial.regions.is_empty());
+        assert!(world.entities.countries.is_empty());
+        assert!(world.entities.cities.is_empty());
     }
 
     #[test]
