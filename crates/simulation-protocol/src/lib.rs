@@ -102,7 +102,11 @@ impl From<&TerrainState> for RenderTerrainSnapshot {
             height: terrain.height,
             spacing_m: terrain.spacing_m,
             sea_level_m: terrain.sea_level_m,
-            elevation_m: terrain.samples.iter().map(|sample| sample.elevation_m).collect(),
+            elevation_m: terrain
+                .samples
+                .iter()
+                .map(|sample| sample.elevation_m)
+                .collect(),
             moisture_permille: terrain
                 .samples
                 .iter()

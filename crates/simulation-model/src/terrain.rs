@@ -148,13 +148,18 @@ pub enum TerrainError {
 impl core::fmt::Display for TerrainError {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::NonCanonicalGrid => formatter.write_str("terrain grid does not match TEST geometry"),
+            Self::NonCanonicalGrid => {
+                formatter.write_str("terrain grid does not match TEST geometry")
+            }
             Self::WrongSampleCount { found } => write!(
                 formatter,
                 "terrain requires {TERRAIN_SAMPLE_COUNT} samples, found {found}"
             ),
             Self::InvalidMoisture { index } => {
-                write!(formatter, "terrain sample {index} moisture exceeds 1000 permille")
+                write!(
+                    formatter,
+                    "terrain sample {index} moisture exceeds 1000 permille"
+                )
             }
             Self::ClassificationMismatch { index } => write!(
                 formatter,

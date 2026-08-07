@@ -157,11 +157,7 @@ fn smooth_q16(value: u32) -> u32 {
 fn lerp_i32(start: i32, end: i32, factor_q16: u32) -> i32 {
     let delta = i64::from(end) - i64::from(start);
     let interpolated = i64::from(start) + delta * i64::from(factor_q16) / Q16_MAX;
-    i32::try_from(interpolated).unwrap_or(if interpolated < 0 {
-        i32::MIN
-    } else {
-        i32::MAX
-    })
+    i32::try_from(interpolated).unwrap_or(if interpolated < 0 { i32::MIN } else { i32::MAX })
 }
 
 fn lattice_value(seed: u64, x: u32, z: u32, salt: u64) -> i32 {
@@ -280,8 +276,16 @@ mod tests {
     #[test]
     fn canonical_seed_exposes_required_relief_and_biome_variety() {
         let terrain = generate_trial_terrain(2026).expect("terrain should generate");
-        let relief: BTreeSet<_> = terrain.samples.iter().map(|sample| sample.relief as u8).collect();
-        let biome: BTreeSet<_> = terrain.samples.iter().map(|sample| sample.biome as u8).collect();
+        let relief: BTreeSet<_> = terrain
+            .samples
+            .iter()
+            .map(|sample| sample.relief as u8)
+            .collect();
+        let biome: BTreeSet<_> = terrain
+            .samples
+            .iter()
+            .map(|sample| sample.biome as u8)
+            .collect();
 
         for required in [
             ReliefClass::DeepOcean,

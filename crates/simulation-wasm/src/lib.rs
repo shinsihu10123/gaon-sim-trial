@@ -26,8 +26,8 @@ impl SimulationWasm {
     #[wasm_bindgen(constructor)]
     pub fn new(seed_hex: &str) -> Result<SimulationWasm, JsValue> {
         let seed = parse_seed_hex(seed_hex).map_err(|message| JsValue::from_str(&message))?;
-        let terrain = generate_trial_terrain(seed)
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let terrain =
+            generate_trial_terrain(seed).map_err(|error| JsValue::from_str(&error.to_string()))?;
 
         let engine = SimulationEngine::new(seed);
         let mut snapshot = engine.export_snapshot();

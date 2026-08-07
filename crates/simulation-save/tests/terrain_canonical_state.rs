@@ -31,8 +31,8 @@ fn snapshot(world: WorldState) -> EngineSnapshot {
 fn terrain_sample_change_changes_canonical_binary_and_checksum() {
     let mut first_world = WorldState::new(77);
     first_world.terrain = Some(terrain(-500));
-    let first = create_bundle(&snapshot(first_world), SaveKind::Manual)
-        .expect("first terrain should save");
+    let first =
+        create_bundle(&snapshot(first_world), SaveKind::Manual).expect("first terrain should save");
 
     let mut second_world = WorldState::new(77);
     second_world.terrain = Some(terrain(-600));
