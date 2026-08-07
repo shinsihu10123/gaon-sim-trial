@@ -155,6 +155,10 @@ impl WorldSpatialState {
     ///
     /// This does not enforce [`TRIAL_REGION_COUNT`]; the benchmark caller chooses
     /// the count explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same spatial validation errors as [`Self::new`].
     pub fn new_trial(
         bounds: WorldBounds,
         regions: Vec<RegionState>,
