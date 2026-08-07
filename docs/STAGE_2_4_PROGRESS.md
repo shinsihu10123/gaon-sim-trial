@@ -3,7 +3,7 @@
 Status: **PASS**
 
 Validated feature head before evidence update: `f81bc09b7da1c154ab634d92b880567f6f029e92`
-Final evidence head: `259cd4b4daa468688cf7a75949c30ab14a0bf04f`
+Final evidence head: `9b3998457138efe3c70de40e952cca8be452245d`
 PR: #11 `Stage 2.4 deterministic resource generation`
 
 ## Implemented scope
@@ -65,8 +65,8 @@ Viewer workflow run: `31197496599` — **PASS**
 
 ### Final documentation head validation
 
-Core workflow run: `31197819328` — **PASS**
-Viewer workflow run: `31197819317` — **PASS**
+Core workflow run: `31198130419` — **PASS**
+Viewer workflow run: `31198130507` — **PASS**
 
 Verified on the final documentation head:
 
