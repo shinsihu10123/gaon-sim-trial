@@ -2,6 +2,8 @@
 
 use simulation_core::SimulationEngine;
 use simulation_protocol::RenderSnapshot;
+use simulation_save::{create_bundle, SaveKind};
+use simulation_worldgen::generate_trial_terrain;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -11,21 +13,31 @@ pub struct SimulationWasm {
 
 #[wasm_bindgen]
 impl SimulationWasm {
-    /// Creates the browser-owned authoritative engine.
+    /// Creates the browser-owned authoritative engine and its deterministic
+    /// Stage 2.2 terrain.
     ///
     /// A 16-digit hexadecimal seed avoids JavaScript's lossy 53-bit integer
     /// conversion for arbitrary Rust `u64` seeds.
     ///
     /// # Errors
     ///
-    /// Returns a JavaScript error when the seed is not exactly 16 hexadecimal
-    /// digits or cannot be represented as a Rust `u64`.
+    /// Returns a JavaScript error when seed parsing, terrain generation,
+    /// authoritative snapshot validation or engine restoration fails.
     #[wasm_bindgen(constructor)]
     pub fn new(seed_hex: &str) -> Result<SimulationWasm, JsValue> {
         let seed = parse_seed_hex(seed_hex).map_err(|message| JsValue::from_str(&message))?;
-        Ok(Self {
-            engine: SimulationEngine::new(seed),
-        })
+        let terrain = generate_trial_terrain(seed)
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+
+        let engine = SimulationEngine::new(seed);
+        let mut snapshot = engine.export_snapshot();
+        snapshot.world.terrain = Some(terrain);
+        let bundle = create_bundle(&snapshot, SaveKind::Manual)
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let engine = SimulationEngine::from_save_bundle(&bundle)
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+
+        Ok(Self { engine })
     }
 
     /// Serializes the current renderer-facing snapshot.
@@ -82,6 +94,10 @@ fn parse_seed_hex(seed_hex: &str) -> Result<u64, String> {
 
 #[cfg(test)]
 mod tests {
+    use simulation_core::SimulationEngine;
+    use simulation_save::{create_bundle, SaveKind};
+    use simulation_worldgen::generate_trial_terrain;
+
     use super::parse_seed_hex;
 
     #[test]
@@ -90,5 +106,16 @@ mod tests {
         assert_eq!(parse_seed_hex("ffffffffffffffff"), Ok(u64::MAX));
         assert!(parse_seed_hex("1234").is_err());
         assert!(parse_seed_hex("gggggggggggggggg").is_err());
+    }
+
+    #[test]
+    fn generated_terrain_can_become_authoritative_engine_state() {
+        let seed = 2026;
+        let mut snapshot = SimulationEngine::new(seed).export_snapshot();
+        snapshot.world.terrain = Some(generate_trial_terrain(seed).expect("terrain generates"));
+        let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("snapshot saves");
+        let restored = SimulationEngine::from_save_bundle(&bundle).expect("engine restores");
+        assert!(restored.state().terrain.is_some());
+        assert_eq!(restored.state().seed, seed);
     }
 }
