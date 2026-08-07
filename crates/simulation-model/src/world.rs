@@ -186,8 +186,8 @@ impl WorldSpatialState {
     /// Validates canonical dynamic-region topology.
     ///
     /// An entirely empty `(None, [])` state is the only uninitialized form.
-    /// Initialized states may contain any region count representable by the
-    /// collection. Region IDs must be non-zero, unique and strictly ascending,
+    /// Initialized states may contain any positive region count representable by
+    /// the collection. Region IDs must be non-zero, unique and strictly ascending,
     /// but are not required to be contiguous.
     ///
     /// # Errors
@@ -215,6 +215,9 @@ impl WorldSpatialState {
         let Some(bounds) = self.bounds else {
             return Err(WorldSpatialError::PartialInitialization);
         };
+        if self.regions.is_empty() {
+            return Err(WorldSpatialError::PartialInitialization);
+        }
 
         let mut previous_region_id = None;
         for region in &self.regions {
