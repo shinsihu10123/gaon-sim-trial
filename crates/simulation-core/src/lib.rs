@@ -140,9 +140,8 @@ impl SimulationEngine {
         };
 
         self.pending_commands.push(command);
-        self.pending_commands.sort_by_key(|queued| {
-            (queued.execute_on, queued.priority, queued.id)
-        });
+        self.pending_commands
+            .sort_by_key(|queued| (queued.execute_on, queued.priority, queued.id));
 
         Ok(id)
     }
@@ -176,7 +175,10 @@ impl SimulationEngine {
         self.submit_command(CommandRequest::country_ai(country_id, timing, payload))
     }
 
-    fn resolve_execution_date(&self, timing: CommandTiming) -> Result<SimulationDate, CommandError> {
+    fn resolve_execution_date(
+        &self,
+        timing: CommandTiming,
+    ) -> Result<SimulationDate, CommandError> {
         match timing {
             CommandTiming::Immediate => Ok(self.state.date),
             CommandTiming::Scheduled(requested) => {
@@ -476,7 +478,10 @@ mod tests {
         assert_eq!(first.commands_executed, 0);
         assert_eq!(second.commands_executed, 0);
         assert_eq!(third.commands_executed, 1);
-        assert_eq!(engine.command_log()[0].executed_on, SimulationDate::new(1, 1, 3));
+        assert_eq!(
+            engine.command_log()[0].executed_on,
+            SimulationDate::new(1, 1, 3)
+        );
     }
 
     #[test]
