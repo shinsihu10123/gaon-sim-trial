@@ -353,7 +353,8 @@ fn deposit_with_quality_access(
     let terrain_effect = effects
         .sample(index)
         .ok_or(ResourceGenerationError::TerrainEffectAlignment)?;
-    let quality = 450_u16.saturating_add(random_permille(seed, index, quality_salt) * 500 / 1_000);
+    let quality_adjustment = u32::from(random_permille(seed, index, quality_salt)) * 500 / 1_000;
+    let quality = 450_u16.saturating_add(u16::try_from(quality_adjustment).unwrap_or(500));
     let random_access = random_permille(seed, index, ACCESSIBILITY_SALT);
     let movement_penalty = terrain_effect.movement_cost_permille.saturating_sub(1_000) / 2;
     let construction_penalty = terrain_effect
