@@ -6,6 +6,7 @@ members = [
   "crates/simulation-save",
   "crates/simulation-runner",
   "crates/simulation-protocol",
+  "crates/simulation-worldgen",
   "crates/simulation-wasm",
 ]
 

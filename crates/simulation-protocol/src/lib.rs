@@ -1,9 +1,11 @@
 #![forbid(unsafe_code)]
 
 use serde::Serialize;
-use simulation_model::{MapPoint, RegionSurface, WorldBounds, WorldState};
+use simulation_model::{
+    BiomeClass, MapPoint, RegionSurface, ReliefClass, TerrainState, WorldBounds, WorldState,
+};
 
-pub const RENDER_SNAPSHOT_VERSION: u32 = 1;
+pub const RENDER_SNAPSHOT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,14 +56,22 @@ pub struct RenderDate {
 pub struct RenderWorldSnapshot {
     pub initialized: bool,
     pub bounds: Option<RenderWorldBounds>,
+    pub terrain: Option<RenderTerrainSnapshot>,
     pub regions: Vec<RenderRegionSnapshot>,
 }
 
 impl RenderWorldSnapshot {
     fn from_world(world: &WorldState) -> Self {
+        let terrain = world.terrain.as_ref().map(RenderTerrainSnapshot::from);
+        let bounds = world
+            .spatial
+            .bounds
+            .or_else(|| world.terrain.as_ref().map(|terrain| terrain.bounds))
+            .map(RenderWorldBounds::from);
         Self {
-            initialized: world.spatial.is_initialized(),
-            bounds: world.spatial.bounds.map(RenderWorldBounds::from),
+            initialized: terrain.is_some() || world.spatial.is_initialized(),
+            bounds,
+            terrain,
             regions: world
                 .spatial
                 .regions
@@ -69,6 +79,86 @@ impl RenderWorldSnapshot {
                 .map(RenderRegionSnapshot::from)
                 .collect(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderTerrainSnapshot {
+    pub width: u16,
+    pub height: u16,
+    pub spacing_m: i32,
+    pub sea_level_m: i16,
+    pub elevation_m: Vec<i16>,
+    pub moisture_permille: Vec<u16>,
+    pub relief_codes: Vec<u8>,
+    pub biome_codes: Vec<u8>,
+    pub downstream_indices: Vec<u32>,
+    pub drainage_basin_ids: Vec<u16>,
+    pub flow_accumulation: Vec<u32>,
+    pub river_orders: Vec<u8>,
+    pub landmass_ids: Vec<u16>,
+    pub island_landmass_ids: Vec<u16>,
+}
+
+impl From<&TerrainState> for RenderTerrainSnapshot {
+    fn from(terrain: &TerrainState) -> Self {
+        let hydrology = terrain.derive_hydrology();
+        let landmasses = terrain.derive_landmasses();
+        Self {
+            width: terrain.width,
+            height: terrain.height,
+            spacing_m: terrain.spacing_m,
+            sea_level_m: terrain.sea_level_m,
+            elevation_m: terrain
+                .samples
+                .iter()
+                .map(|sample| sample.elevation_m)
+                .collect(),
+            moisture_permille: terrain
+                .samples
+                .iter()
+                .map(|sample| sample.moisture_permille)
+                .collect(),
+            relief_codes: terrain
+                .samples
+                .iter()
+                .map(|sample| relief_code(sample.relief))
+                .collect(),
+            biome_codes: terrain
+                .samples
+                .iter()
+                .map(|sample| biome_code(sample.biome))
+                .collect(),
+            downstream_indices: hydrology.downstream_indices,
+            drainage_basin_ids: hydrology.drainage_basin_ids,
+            flow_accumulation: hydrology.flow_accumulation,
+            river_orders: hydrology.river_orders,
+            landmass_ids: landmasses.landmass_ids,
+            island_landmass_ids: landmasses.island_landmass_ids,
+        }
+    }
+}
+
+const fn relief_code(relief: ReliefClass) -> u8 {
+    match relief {
+        ReliefClass::DeepOcean => 0,
+        ReliefClass::ShallowOcean => 1,
+        ReliefClass::Coast => 2,
+        ReliefClass::Plains => 3,
+        ReliefClass::Hills => 4,
+        ReliefClass::Mountains => 5,
+    }
+}
+
+const fn biome_code(biome: BiomeClass) -> u8 {
+    match biome {
+        BiomeClass::Ocean => 0,
+        BiomeClass::Grassland => 1,
+        BiomeClass::Forest => 2,
+        BiomeClass::Desert => 3,
+        BiomeClass::Wetland => 4,
+        BiomeClass::Alpine => 5,
     }
 }
 
@@ -153,11 +243,12 @@ impl From<MapPoint> for RenderMapPoint {
 #[cfg(test)]
 mod tests {
     use simulation_model::{
-        MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldBounds,
-        WorldSpatialState, WorldState, TRIAL_REGION_COUNT,
+        BiomeClass, MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface,
+        ReliefClass, TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,
+        NO_DOWNSTREAM_INDEX, TERRAIN_SAMPLE_COUNT, TRIAL_REGION_COUNT,
     };
 
-    use super::{RenderRegionSurface, RenderSnapshot};
+    use super::{RenderRegionSurface, RenderSnapshot, RENDER_SNAPSHOT_VERSION};
 
     fn sample_spatial_world() -> WorldSpatialState {
         let regions = (1..=TRIAL_REGION_COUNT)
@@ -192,14 +283,49 @@ mod tests {
         .expect("spatial world valid")
     }
 
+    fn sample_terrain() -> TerrainState {
+        TerrainState::new_trial(vec![
+            TerrainSample {
+                elevation_m: -500,
+                moisture_permille: 500,
+                relief: ReliefClass::ShallowOcean,
+                biome: BiomeClass::Ocean,
+            };
+            TERRAIN_SAMPLE_COUNT
+        ])
+        .expect("terrain valid")
+    }
+
     #[test]
     fn uninitialized_stage_one_world_serializes_without_fake_regions() {
         let world = WorldState::new(7);
         let snapshot = RenderSnapshot::from_world(&world, 0, 0, 0x1234);
+        assert_eq!(snapshot.version, RENDER_SNAPSHOT_VERSION);
         assert!(!snapshot.world.initialized);
         assert!(snapshot.world.bounds.is_none());
+        assert!(snapshot.world.terrain.is_none());
         assert!(snapshot.world.regions.is_empty());
         assert_eq!(snapshot.authoritative_digest_hex, "0000000000001234");
+    }
+
+    #[test]
+    fn terrain_initialization_exposes_heightfield_and_derived_geography() {
+        let mut world = WorldState::new(7);
+        world.terrain = Some(sample_terrain());
+        let snapshot = RenderSnapshot::from_world(&world, 0, 0, 0x55);
+        assert!(snapshot.world.initialized);
+        assert!(snapshot.world.bounds.is_some());
+        let terrain = snapshot.world.terrain.expect("terrain snapshot present");
+        assert_eq!(terrain.elevation_m.len(), TERRAIN_SAMPLE_COUNT);
+        assert_eq!(terrain.downstream_indices.len(), TERRAIN_SAMPLE_COUNT);
+        assert_eq!(terrain.river_orders.len(), TERRAIN_SAMPLE_COUNT);
+        assert_eq!(terrain.landmass_ids.len(), TERRAIN_SAMPLE_COUNT);
+        assert!(terrain
+            .downstream_indices
+            .iter()
+            .all(|&index| index == NO_DOWNSTREAM_INDEX));
+        assert!(terrain.island_landmass_ids.is_empty());
+        assert!(snapshot.world.regions.is_empty());
     }
 
     #[test]

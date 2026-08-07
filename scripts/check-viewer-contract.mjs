@@ -48,3 +48,4 @@ if (
 
 console.log("Stage 1.1 browser ownership contract verified");
 await import("./check-world-data-contract.mjs");
+await import("./check-terrain-contract.mjs");

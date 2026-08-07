@@ -126,6 +126,7 @@ dependencies = [
  "simulation-core",
  "simulation-model",
  "simulation-save",
+ "simulation-worldgen",
 ]
 
 [[package]]
@@ -144,7 +145,16 @@ dependencies = [
  "serde_json",
  "simulation-core",
  "simulation-protocol",
+ "simulation-save",
+ "simulation-worldgen",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "simulation-worldgen"
+version = "0.1.0"
+dependencies = [
+ "simulation-model",
 ]
 
 [[package]]
