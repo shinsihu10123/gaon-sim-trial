@@ -1,0 +1,12 @@
+[package]
+name = "simulation-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+simulation-model = { path = "../simulation-model" }
+
+[lints]
+workspace = true
