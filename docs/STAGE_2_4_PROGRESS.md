@@ -14,22 +14,22 @@ Status: **IN PROGRESS**
 - `ResourceFieldState` and deterministic region-ready aggregation
 - weighted aggregate quality/accessibility
 - ocean-resource validation contract
+- deterministic food/energy/metals/construction generation from seed + geography
+- representative-seed distribution-balance envelope and concentration diagnostics
 - Stage 2.4 architecture and calibration-status documentation
 
-## Remaining before PASS
+## Integration now being applied
 
 - expose resource model through `simulation-model` public API
 - add authoritative resource field to `WorldState`
-- deterministic seed/geography resource generator
-- energy distribution
-- metal distribution
-- construction/timber distribution
-- resource quality/accessibility generation
-- save format migration and exact round-trip
-- canonical digest integration
-- WASM/RenderSnapshot inspection substrate as needed
-- same-seed/different-seed tests
-- representative-seed resource balance tests
+- migrate save format to v4 with exact remaining-stock serialization
+- include resource state in canonical digest through authoritative binary
+- initialize identical terrain/resource state in headless and WASM entry paths
+
+## Remaining before PASS
+
+- exact save/load extraction-state round-trip test
+- same-seed/different-seed tests on integrated authoritative state
 - strict Clippy / locked Rust tests
 - headless save/load/replay validation
 - permanent source-contract validation
@@ -37,12 +37,12 @@ Status: **IN PROGRESS**
 
 ## WBS status
 
-- [ ] 2.4.1 food production base placement
-- [ ] 2.4.2 energy resource placement
-- [ ] 2.4.3 metal resource placement
-- [ ] 2.4.4 timber/construction resource placement
+- [~] 2.4.1 food production base placement
+- [~] 2.4.2 energy resource placement
+- [~] 2.4.3 metal resource placement
+- [~] 2.4.4 timber/construction resource placement
 - [~] 2.4.5 reserve quantity and quality schema
 - [~] 2.4.6 extractable quantity and depletion structure
-- [ ] 2.4.7 resource-distribution balance validation
+- [~] 2.4.7 resource-distribution balance validation
 
 No Stage 2.4 item is marked complete until implementation, integration, validation and evidence all pass.
