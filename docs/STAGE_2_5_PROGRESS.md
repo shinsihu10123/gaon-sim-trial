@@ -37,6 +37,7 @@ Current integration gate:
 - rustfmt and model-level strict Clippy findings are resolved
 - Save validation recognizes System command attribution
 - Save registry iteration/import findings are corrected
-- permanent Core/Viewer CI is proceeding into binary codec, tests and headless replay validation
+- legacy spatial canonical test fixtures are migrated from u16 Region IDs to u64 Stable IDs
+- permanent Core/Viewer CI is proceeding into remaining workspace tests and headless replay validation
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
