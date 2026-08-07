@@ -2,6 +2,8 @@
 
 Status: **UNDER VALIDATION**
 
+Validation branch: `feature/stage-2-1-dynamic-region-audit`
+
 WBS v2.0 re-review scope:
 
 - 2.1.3 world coordinate/size validity under variable Region counts
