@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod hydrology;
+
+use hydrology::{derive_hydrology, derive_landmasses, ensure_seeded_island};
 use simulation_model::{
     BiomeClass, ReliefClass, TerrainError, TerrainSample, TerrainState, TERRAIN_GRID_SIDE,
     TERRAIN_SAMPLE_COUNT,
@@ -76,6 +79,11 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
     }
 
     limit_neighbor_elevation_delta(&mut elevations, side);
+    let _ = ensure_seeded_island(&mut elevations, side, seed);
+    limit_neighbor_elevation_delta(&mut elevations, side);
+
+    let hydrology = derive_hydrology(&elevations, side);
+    let landmasses = derive_landmasses(&elevations, side);
 
     let mut samples = Vec::with_capacity(TERRAIN_SAMPLE_COUNT);
     for index in 0..TERRAIN_SAMPLE_COUNT {
@@ -92,7 +100,7 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
         });
     }
 
-    TerrainState::new_trial(samples)
+    TerrainState::new_trial(samples)?.with_derived_geography(hydrology, landmasses)
 }
 
 fn limit_neighbor_elevation_delta(elevations: &mut [i16], side: usize) {
@@ -369,6 +377,19 @@ mod tests {
                 }
             }
             assert!(maximum_delta <= MAX_NEIGHBOR_ELEVATION_DELTA_M);
+        }
+    }
+
+    #[test]
+    fn generated_world_has_authoritative_rivers_basins_and_islands() {
+        for seed in [1, 2026, 2027, u64::MAX] {
+            let terrain = generate_trial_terrain(seed).expect("terrain should generate");
+            let hydrology = terrain.hydrology.as_ref().expect("hydrology required");
+            let landmasses = terrain.landmasses.as_ref().expect("landmasses required");
+            assert!(terrain.river_sample_count() > 0);
+            assert!(hydrology.drainage_basin_ids.iter().any(|&id| id > 0));
+            assert!(terrain.island_count() > 0);
+            assert!(landmasses.landmass_ids.iter().copied().max().unwrap_or(0) >= 2);
         }
     }
 }
