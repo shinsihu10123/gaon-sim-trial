@@ -35,7 +35,7 @@ Current integration gate:
 - lifecycle facts are represented in Event Ledger payloads
 - RenderSnapshot crosses the JS boundary with decimal-string entity IDs
 - rustfmt is green
-- first strict Clippy findings were remediated without suppressing warnings
-- final two model-style Clippy findings are being normalized before full compile/test validation
+- strict Clippy model-style findings have been corrected without warning suppression
+- permanent Core/Viewer CI is now proceeding to deeper compile/test validation
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
