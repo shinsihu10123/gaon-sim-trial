@@ -20,17 +20,17 @@ Status: **IN PROGRESS**
 - Terrain-specific source contract
 - Canonical-state terrain checksum test
 
-## Pending validation
+## Validation status
 
-- rustfmt
-- strict Clippy
-- complete Rust workspace tests
-- headless deterministic regression
-- locked Cargo graph verification
-- actual browser WASM build
-- npm ci
-- TypeScript typecheck
-- Vite production build
-- Stage 2.1 regression contract
-- Stage 2.2 terrain contract
-- final evidence and acceptance
+- rustfmt: normalized
+- strict Clippy: pending
+- complete Rust workspace tests: pending
+- headless deterministic regression: pending
+- locked Cargo graph verification: pending
+- actual browser WASM build: pending
+- npm ci: pending
+- TypeScript typecheck: pending
+- Vite production build: pending
+- Stage 2.1 regression contract: pending
+- Stage 2.2 terrain contract: pending
+- final evidence and acceptance: pending
