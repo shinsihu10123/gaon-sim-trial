@@ -26,6 +26,7 @@ Status: **IN PROGRESS**
 - canonical digest includes resource stocks through authoritative binary serialization
 - extraction-state round-trip regression added
 - Cargo lockfile refreshed and committed for the new workspace dev-dependency edge
+- strict Clippy duplicate-match correction in progress
 
 ## Remaining before PASS
 
