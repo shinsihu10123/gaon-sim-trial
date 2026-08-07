@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
 
+mod event;
+
+pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
+
 /// Stable identifier for a country in the trial simulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CountryId(pub u16);
