@@ -1,0 +1,31 @@
+name: Dynamic Region Formatter
+
+on:
+  push:
+    branches: [feature/stage-2-1-dynamic-region-audit]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stage-2-1-dynamic-region-audit
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all
+      - name: Commit formatting if needed
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: apply rustfmt to dynamic region audit"
+          git push
