@@ -56,7 +56,9 @@ impl ResourceDeposit {
         if self.initial_quantity == 0 {
             return 0;
         }
-        let depleted = self.initial_quantity.saturating_sub(self.remaining_quantity);
+        let depleted = self
+            .initial_quantity
+            .saturating_sub(self.remaining_quantity);
         let value = depleted.saturating_mul(1_000) / self.initial_quantity;
         u16::try_from(value).unwrap_or(1_000)
     }
@@ -162,7 +164,10 @@ impl ResourceFieldState {
         }
         for (index, cell) in cells.iter().copied().enumerate() {
             cell.validate()
-                .map_err(|source| ResourceError::InvalidCell { index, source: source.kind() })?;
+                .map_err(|source| ResourceError::InvalidCell {
+                    index,
+                    source: source.kind(),
+                })?;
         }
         Ok(Self { cells })
     }
@@ -219,14 +224,10 @@ impl ResourceFieldState {
                 * u128::from(cell.construction.accessibility_permille);
         }
 
-        aggregate.energy_quality_permille = weighted_permille(
-            energy_quality_weighted,
-            aggregate.energy_remaining,
-        );
-        aggregate.energy_accessibility_permille = weighted_permille(
-            energy_access_weighted,
-            aggregate.energy_remaining,
-        );
+        aggregate.energy_quality_permille =
+            weighted_permille(energy_quality_weighted, aggregate.energy_remaining);
+        aggregate.energy_accessibility_permille =
+            weighted_permille(energy_access_weighted, aggregate.energy_remaining);
         aggregate.metals_quality_permille =
             weighted_permille(metal_quality_weighted, aggregate.metals_remaining);
         aggregate.metals_accessibility_permille =
@@ -257,10 +258,12 @@ impl ResourceFieldState {
         for (index, (terrain_sample, resource_cell)) in
             terrain.samples.iter().zip(&self.cells).enumerate()
         {
-            resource_cell.validate().map_err(|source| ResourceError::InvalidCell {
-                index,
-                source: source.kind(),
-            })?;
+            resource_cell
+                .validate()
+                .map_err(|source| ResourceError::InvalidCell {
+                    index,
+                    source: source.kind(),
+                })?;
             if terrain_sample.elevation_m < terrain.sea_level_m
                 && *resource_cell != ResourceCellState::OCEAN
             {
@@ -294,9 +297,8 @@ pub fn food_capacity_from_terrain_effects(
     index: usize,
 ) -> Option<u32> {
     let terrain_effect = effects.sample(index)?;
-    let capacity = 50_000_u64
-        .saturating_mul(u64::from(terrain_effect.agriculture_yield_permille))
-        / 1_000;
+    let capacity =
+        50_000_u64.saturating_mul(u64::from(terrain_effect.agriculture_yield_permille)) / 1_000;
     u32::try_from(capacity).ok()
 }
 
@@ -314,9 +316,16 @@ pub enum ResourceError {
     InvalidAccessibility(u16),
     RemainingExceedsInitial,
     InvalidEmptyDeposit,
-    WrongCellCount { found: usize },
-    InvalidCell { index: usize, source: ResourceErrorKind },
-    OceanContainsLandResources { index: usize },
+    WrongCellCount {
+        found: usize,
+    },
+    InvalidCell {
+        index: usize,
+        source: ResourceErrorKind,
+    },
+    OceanContainsLandResources {
+        index: usize,
+    },
 }
 
 impl ResourceError {
@@ -336,7 +345,9 @@ impl ResourceError {
 impl core::fmt::Display for ResourceError {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::InvalidQuality(value) => write!(formatter, "resource quality {value} exceeds 1000"),
+            Self::InvalidQuality(value) => {
+                write!(formatter, "resource quality {value} exceeds 1000")
+            }
             Self::InvalidAccessibility(value) => {
                 write!(formatter, "resource accessibility {value} exceeds 1000")
             }
@@ -354,7 +365,10 @@ impl core::fmt::Display for ResourceError {
                 write!(formatter, "resource cell {index} is invalid: {source:?}")
             }
             Self::OceanContainsLandResources { index } => {
-                write!(formatter, "ocean terrain sample {index} contains land resources")
+                write!(
+                    formatter,
+                    "ocean terrain sample {index} contains land resources"
+                )
             }
         }
     }

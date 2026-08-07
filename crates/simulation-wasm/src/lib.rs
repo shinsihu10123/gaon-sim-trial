@@ -3,7 +3,7 @@
 use simulation_core::SimulationEngine;
 use simulation_protocol::RenderSnapshot;
 use simulation_save::{create_bundle, SaveKind};
-use simulation_worldgen::generate_trial_terrain;
+use simulation_worldgen::{generate_trial_resources, generate_trial_terrain};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -29,8 +29,12 @@ impl SimulationWasm {
         let terrain =
             generate_trial_terrain(seed).map_err(|error| JsValue::from_str(&error.to_string()))?;
 
+        let resources = generate_trial_resources(seed, &terrain)
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+
         let engine = SimulationEngine::new(seed);
         let mut snapshot = engine.export_snapshot();
+        snapshot.world.resources = Some(resources);
         snapshot.world.terrain = Some(terrain);
         let bundle = create_bundle(&snapshot, SaveKind::Manual)
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
@@ -96,7 +100,7 @@ fn parse_seed_hex(seed_hex: &str) -> Result<u64, String> {
 mod tests {
     use simulation_core::SimulationEngine;
     use simulation_save::{create_bundle, SaveKind};
-    use simulation_worldgen::generate_trial_terrain;
+    use simulation_worldgen::{generate_trial_resources, generate_trial_terrain};
 
     use super::parse_seed_hex;
 
@@ -112,10 +116,14 @@ mod tests {
     fn generated_terrain_can_become_authoritative_engine_state() {
         let seed = 2026;
         let mut snapshot = SimulationEngine::new(seed).export_snapshot();
-        snapshot.world.terrain = Some(generate_trial_terrain(seed).expect("terrain generates"));
+        let terrain = generate_trial_terrain(seed).expect("terrain generates");
+        snapshot.world.resources =
+            Some(generate_trial_resources(seed, &terrain).expect("resources generate"));
+        snapshot.world.terrain = Some(terrain);
         let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("snapshot saves");
         let restored = SimulationEngine::from_save_bundle(&bundle).expect("engine restores");
         assert!(restored.state().terrain.is_some());
+        assert!(restored.state().resources.is_some());
         assert_eq!(restored.state().seed, seed);
     }
 }

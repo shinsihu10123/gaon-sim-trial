@@ -1,8 +1,13 @@
 #![forbid(unsafe_code)]
 
 mod hydrology;
+mod resources;
 
 use hydrology::ensure_seeded_island;
+pub use resources::{
+    generate_trial_resources, resource_balance_report, validate_resource_balance,
+    ResourceBalanceReport, ResourceGenerationError,
+};
 use simulation_model::{
     BiomeClass, ReliefClass, TerrainError, TerrainHydrology, TerrainLandmasses, TerrainSample,
     TerrainState, TERRAIN_GRID_SIDE, TERRAIN_SAMPLE_COUNT,

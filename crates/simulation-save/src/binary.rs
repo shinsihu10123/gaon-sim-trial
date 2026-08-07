@@ -2,7 +2,8 @@ use simulation_model::{
     BiomeClass, CommandExecutionRecord, CommandId, CommandPayload, CommandPriority, CommandSource,
     CountryId, EventCategory, EventId, EventPayload, EventRecord, EventSource, MapPoint,
     QueuedCommand, RegionId, RegionPoliticalState, RegionState, RegionSurface, ReliefClass,
-    SimulationDate, TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,
+    ResourceCellState, ResourceDeposit, ResourceFieldState, SimulationDate, TerrainSample,
+    TerrainState, WorldBounds, WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -105,6 +106,14 @@ fn write_world(bytes: &mut Vec<u8>, world: &WorldState) -> Result<(), SaveError>
         }
     }
 
+    match &world.resources {
+        None => write_u8(bytes, 0),
+        Some(resources) => {
+            write_u8(bytes, 1);
+            write_resource_field(bytes, resources)?;
+        }
+    }
+
     match world.spatial.bounds {
         None => write_u8(bytes, 0),
         Some(bounds) => {
@@ -134,6 +143,17 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
         tag => {
             return Err(SaveError::InvalidTag {
                 field: "terrain state",
+                tag,
+            });
+        }
+    };
+
+    let resources = match cursor.read_u8()? {
+        0 => None,
+        1 => Some(read_resource_field(cursor)?),
+        tag => {
+            return Err(SaveError::InvalidTag {
+                field: "resource state",
                 tag,
             });
         }
@@ -170,6 +190,7 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
         elapsed_days,
         seed,
         terrain,
+        resources,
         spatial,
     })
 }
@@ -228,6 +249,55 @@ fn read_terrain(cursor: &mut Cursor<'_>) -> Result<TerrainState, SaveError> {
         .validate()
         .map_err(|_| SaveError::InvalidBinary("invalid terrain state"))?;
     Ok(terrain)
+}
+
+fn write_resource_field(
+    bytes: &mut Vec<u8>,
+    resources: &ResourceFieldState,
+) -> Result<(), SaveError> {
+    write_count(bytes, "resource_cells", resources.cells.len())?;
+    for cell in &resources.cells {
+        write_u32(bytes, cell.food_capacity_tonnes_per_year);
+        write_resource_deposit(bytes, cell.energy);
+        write_resource_deposit(bytes, cell.metals);
+        write_resource_deposit(bytes, cell.construction);
+    }
+    Ok(())
+}
+
+fn read_resource_field(cursor: &mut Cursor<'_>) -> Result<ResourceFieldState, SaveError> {
+    let count = cursor.read_count("resource_cells")?;
+    let mut cells = Vec::with_capacity(count);
+    for _ in 0..count {
+        cells.push(ResourceCellState {
+            food_capacity_tonnes_per_year: cursor.read_u32()?,
+            energy: read_resource_deposit(cursor)?,
+            metals: read_resource_deposit(cursor)?,
+            construction: read_resource_deposit(cursor)?,
+        });
+    }
+    ResourceFieldState::new(cells)
+        .map_err(|_| SaveError::InvalidBinary("invalid Stage 2.4 resource field"))
+}
+
+fn write_resource_deposit(bytes: &mut Vec<u8>, deposit: ResourceDeposit) {
+    write_u64(bytes, deposit.initial_quantity);
+    write_u64(bytes, deposit.remaining_quantity);
+    write_u16(bytes, deposit.quality_permille);
+    write_u16(bytes, deposit.accessibility_permille);
+}
+
+fn read_resource_deposit(cursor: &mut Cursor<'_>) -> Result<ResourceDeposit, SaveError> {
+    let deposit = ResourceDeposit {
+        initial_quantity: cursor.read_u64()?,
+        remaining_quantity: cursor.read_u64()?,
+        quality_permille: cursor.read_u16()?,
+        accessibility_permille: cursor.read_u16()?,
+    };
+    deposit
+        .validate()
+        .map_err(|_| SaveError::InvalidBinary("invalid resource deposit"))?;
+    Ok(deposit)
 }
 
 fn write_relief(bytes: &mut Vec<u8>, relief: ReliefClass) {

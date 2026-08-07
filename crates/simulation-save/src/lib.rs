@@ -10,8 +10,8 @@ use simulation_model::{
     EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
 };
 
-/// Stage 2.2 adds the canonical terrain heightfield to authoritative state.
-pub const SAVE_FORMAT_VERSION: u32 = 3;
+/// Stage 2.4 adds finite resource stocks to authoritative state.
+pub const SAVE_FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -308,6 +308,17 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
                     "terrain and region topology bounds disagree",
                 ));
             }
+        }
+    }
+
+    if let Some(resources) = &world.resources {
+        let terrain = world.terrain.as_ref().ok_or(SaveError::SnapshotInvariant(
+            "resource state exists without canonical terrain",
+        ))?;
+        if resources.validate_against_terrain(terrain).is_err() {
+            return Err(SaveError::SnapshotInvariant(
+                "resource state violates Stage 2.4 invariants",
+            ));
         }
     }
 

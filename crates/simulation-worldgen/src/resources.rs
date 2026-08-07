@@ -37,10 +37,19 @@ pub enum ResourceGenerationError {
     TerrainEffectAlignment,
     NoLand,
     MissingFoodBase,
-    EnergyCoverageOutOfRange { permille: u16 },
-    MetalCoverageOutOfRange { permille: u16 },
-    ConstructionCoverageOutOfRange { permille: u16 },
-    ExcessiveConcentration { resource: &'static str, permille: u16 },
+    EnergyCoverageOutOfRange {
+        permille: u16,
+    },
+    MetalCoverageOutOfRange {
+        permille: u16,
+    },
+    ConstructionCoverageOutOfRange {
+        permille: u16,
+    },
+    ExcessiveConcentration {
+        resource: &'static str,
+        permille: u16,
+    },
 }
 
 impl core::fmt::Display for ResourceGenerationError {
@@ -50,13 +59,23 @@ impl core::fmt::Display for ResourceGenerationError {
             Self::TerrainEffectAlignment => {
                 formatter.write_str("terrain effect field does not align with terrain samples")
             }
-            Self::NoLand => formatter.write_str("resource generation requires at least one land cell"),
-            Self::MissingFoodBase => formatter.write_str("generated land has no renewable food base"),
+            Self::NoLand => {
+                formatter.write_str("resource generation requires at least one land cell")
+            }
+            Self::MissingFoodBase => {
+                formatter.write_str("generated land has no renewable food base")
+            }
             Self::EnergyCoverageOutOfRange { permille } => {
-                write!(formatter, "energy deposit coverage {permille} permille is outside TEST bounds")
+                write!(
+                    formatter,
+                    "energy deposit coverage {permille} permille is outside TEST bounds"
+                )
             }
             Self::MetalCoverageOutOfRange { permille } => {
-                write!(formatter, "metal deposit coverage {permille} permille is outside TEST bounds")
+                write!(
+                    formatter,
+                    "metal deposit coverage {permille} permille is outside TEST bounds"
+                )
             }
             Self::ConstructionCoverageOutOfRange { permille } => write!(
                 formatter,
@@ -94,7 +113,8 @@ pub fn generate_trial_resources(
     terrain: &TerrainState,
 ) -> Result<ResourceFieldState, ResourceGenerationError> {
     let effects = derive_terrain_effects(terrain);
-    if terrain.samples.len() != TERRAIN_SAMPLE_COUNT || effects.samples.len() != terrain.samples.len()
+    if terrain.samples.len() != TERRAIN_SAMPLE_COUNT
+        || effects.samples.len() != terrain.samples.len()
     {
         return Err(ResourceGenerationError::TerrainEffectAlignment);
     }
@@ -206,20 +226,8 @@ pub fn validate_resource_balance(
         return Err(ResourceGenerationError::MissingFoodBase);
     }
 
-    validate_coverage(
-        "energy",
-        report.energy_cells,
-        report.land_cells,
-        120,
-        450,
-    )?;
-    validate_coverage(
-        "metals",
-        report.metal_cells,
-        report.land_cells,
-        100,
-        420,
-    )?;
+    validate_coverage("energy", report.energy_cells, report.land_cells, 120, 450)?;
+    validate_coverage("metals", report.metal_cells, report.land_cells, 100, 420)?;
     validate_coverage(
         "construction",
         report.construction_cells,
@@ -248,7 +256,8 @@ pub fn validate_resource_balance(
 
 fn food_capacity(seed: u64, effects: &TerrainEffectField, index: usize) -> Option<u32> {
     let base = u64::from(food_capacity_from_terrain_effects(effects, index)?);
-    let fertility = 850_u64 + u64::from(random_permille(seed, index, FOOD_FERTILITY_SALT)) * 300 / 1_000;
+    let fertility =
+        850_u64 + u64::from(random_permille(seed, index, FOOD_FERTILITY_SALT)) * 300 / 1_000;
     u32::try_from(base.saturating_mul(fertility) / 1_000).ok()
 }
 
@@ -266,20 +275,18 @@ fn energy_deposit(
         ReliefClass::Mountains => -80,
         ReliefClass::DeepOcean | ReliefClass::ShallowOcean => -1_000,
     };
-    let wetland_bonus = if sample.biome == BiomeClass::Wetland { 35 } else { 0 };
+    let wetland_bonus = if sample.biome == BiomeClass::Wetland {
+        35
+    } else {
+        0
+    };
     let score = geology + relief_adjustment + wetland_bonus;
     if score < 790 {
         return Ok(ResourceDeposit::empty());
     }
     let richness = u64::try_from(score.saturating_sub(760)).unwrap_or(0);
     let quantity = 12_000_u64.saturating_add(richness.saturating_mul(650));
-    deposit_with_quality_access(
-        seed,
-        index,
-        quantity,
-        ENERGY_QUALITY_SALT,
-        effects,
-    )
+    deposit_with_quality_access(seed, index, quantity, ENERGY_QUALITY_SALT, effects)
 }
 
 fn metal_deposit(
@@ -302,13 +309,7 @@ fn metal_deposit(
     }
     let richness = u64::try_from(score.saturating_sub(780)).unwrap_or(0);
     let quantity = 8_000_u64.saturating_add(richness.saturating_mul(420));
-    deposit_with_quality_access(
-        seed,
-        index,
-        quantity,
-        METAL_QUALITY_SALT,
-        effects,
-    )
+    deposit_with_quality_access(seed, index, quantity, METAL_QUALITY_SALT, effects)
 }
 
 fn construction_deposit(
@@ -339,13 +340,7 @@ fn construction_deposit(
     }
     let richness = u64::try_from(score.saturating_sub(430)).unwrap_or(0);
     let quantity = 15_000_u64.saturating_add(richness.saturating_mul(300));
-    deposit_with_quality_access(
-        seed,
-        index,
-        quantity,
-        CONSTRUCTION_QUALITY_SALT,
-        effects,
-    )
+    deposit_with_quality_access(seed, index, quantity, CONSTRUCTION_QUALITY_SALT, effects)
 }
 
 fn deposit_with_quality_access(
@@ -361,7 +356,10 @@ fn deposit_with_quality_access(
     let quality = 450_u16.saturating_add(random_permille(seed, index, quality_salt) * 500 / 1_000);
     let random_access = random_permille(seed, index, ACCESSIBILITY_SALT);
     let movement_penalty = terrain_effect.movement_cost_permille.saturating_sub(1_000) / 2;
-    let construction_penalty = terrain_effect.construction_cost_permille.saturating_sub(1_000) / 4;
+    let construction_penalty = terrain_effect
+        .construction_cost_permille
+        .saturating_sub(1_000)
+        / 4;
     let terrain_access = 1_000_u16
         .saturating_sub(movement_penalty)
         .saturating_sub(construction_penalty)
@@ -387,15 +385,9 @@ fn validate_coverage(
         return Ok(());
     }
     match resource {
-        "energy" => Err(ResourceGenerationError::EnergyCoverageOutOfRange {
-            permille: coverage,
-        }),
-        "metals" => Err(ResourceGenerationError::MetalCoverageOutOfRange {
-            permille: coverage,
-        }),
-        _ => Err(ResourceGenerationError::ConstructionCoverageOutOfRange {
-            permille: coverage,
-        }),
+        "energy" => Err(ResourceGenerationError::EnergyCoverageOutOfRange { permille: coverage }),
+        "metals" => Err(ResourceGenerationError::MetalCoverageOutOfRange { permille: coverage }),
+        _ => Err(ResourceGenerationError::ConstructionCoverageOutOfRange { permille: coverage }),
     }
 }
 
@@ -419,7 +411,9 @@ fn top_decile_share_permille(quantities: &mut [u64]) -> u16 {
     }
     quantities.sort_unstable_by(|left, right| right.cmp(left));
     let top_count = quantities.len().div_ceil(10).max(1);
-    let total = quantities.iter().fold(0_u128, |sum, &value| sum + u128::from(value));
+    let total = quantities
+        .iter()
+        .fold(0_u128, |sum, &value| sum + u128::from(value));
     let top = quantities
         .iter()
         .take(top_count)

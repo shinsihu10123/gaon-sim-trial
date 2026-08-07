@@ -5,7 +5,7 @@ use std::time::Duration;
 use simulation_core::{SimulationClock, SimulationEngine, SimulationSpeed};
 use simulation_model::{CommandPayload, CommandTiming, CountryId, SimulationDate, TerrainState};
 use simulation_save::{create_bundle, SaveKind};
-use simulation_worldgen::generate_trial_terrain;
+use simulation_worldgen::{generate_trial_resources, generate_trial_terrain};
 
 fn main() {
     let seed = 1;
@@ -100,8 +100,10 @@ fn main() {
 
 fn initialized_engine(seed: u64) -> SimulationEngine {
     let mut initial = SimulationEngine::new(seed).export_snapshot();
-    initial.world.terrain =
-        Some(generate_trial_terrain(seed).expect("trial terrain must generate"));
+    let terrain = generate_trial_terrain(seed).expect("trial terrain must generate");
+    initial.world.resources =
+        Some(generate_trial_resources(seed, &terrain).expect("trial resources must generate"));
+    initial.world.terrain = Some(terrain);
     let bundle =
         create_bundle(&initial, SaveKind::Manual).expect("trial initial state must be saveable");
     SimulationEngine::from_save_bundle(&bundle)
