@@ -1,8 +1,13 @@
 #![forbid(unsafe_code)]
 
 mod event;
+mod world;
 
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
+pub use world::{
+    MapPoint, RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialError,
+    WorldSpatialState, TRIAL_REGION_COUNT,
+};
 
 /// Stable identifier for a country in the trial simulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -246,12 +251,13 @@ impl core::fmt::Display for CommandError {
 
 impl std::error::Error for CommandError {}
 
-/// Minimal world state used to validate deterministic fixed-tick execution.
+/// Authoritative world state owned only by the simulation core.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldState {
     pub date: SimulationDate,
     pub elapsed_days: u64,
     pub seed: u64,
+    pub spatial: WorldSpatialState,
 }
 
 impl WorldState {
@@ -261,6 +267,7 @@ impl WorldState {
             date: SimulationDate::START,
             elapsed_days: 0,
             seed,
+            spatial: WorldSpatialState::uninitialized(),
         }
     }
 }
@@ -278,6 +285,8 @@ mod tests {
         assert_eq!(world.date, SimulationDate::START);
         assert_eq!(world.elapsed_days, 0);
         assert_eq!(world.seed, 42);
+        assert!(!world.spatial.is_initialized());
+        assert!(world.spatial.regions.is_empty());
     }
 
     #[test]
@@ -318,6 +327,8 @@ mod tests {
     fn ordinal_day_and_quarter_are_stable() {
         assert_eq!(SimulationDate::new(1, 1, 1).day_of_year(), 1);
         assert_eq!(SimulationDate::new(1, 12, 31).day_of_year(), 365);
+        assert_eq!(SimulationDate::new(1, 1, 1).quarter(), 1);
+        assert_eq!(SimulationDate::new(1, 4, 1).quarter(), 2);
         assert_eq!(SimulationDate::new(1, 7, 1).quarter(), 3);
     }
 
