@@ -309,7 +309,9 @@ fn validate_command(command: &QueuedCommand, world: &WorldState) -> Result<(), S
         return Err(SaveError::SnapshotInvariant("command id must be nonzero"));
     }
     if !command.submitted_on.is_valid() || !command.execute_on.is_valid() {
-        return Err(SaveError::SnapshotInvariant("command contains invalid date"));
+        return Err(SaveError::SnapshotInvariant(
+            "command contains invalid date",
+        ));
     }
     if command.submitted_on > world.date {
         return Err(SaveError::SnapshotInvariant(
@@ -382,11 +384,12 @@ fn validate_events(
 
         match event.payload {
             EventPayload::CommandExecuted { command_id } => {
-                let source = executed_sources.get(&command_id).ok_or(
-                    SaveError::SnapshotInvariant(
-                        "command-executed event references unknown executed command",
-                    ),
-                )?;
+                let source =
+                    executed_sources
+                        .get(&command_id)
+                        .ok_or(SaveError::SnapshotInvariant(
+                            "command-executed event references unknown executed command",
+                        ))?;
                 if !command_event_ids.insert(command_id) {
                     return Err(SaveError::SnapshotInvariant(
                         "executed command has duplicate execution events",
@@ -504,7 +507,8 @@ mod tests {
     #[test]
     fn metadata_and_binary_round_trip_exactly() {
         let snapshot = empty_snapshot(0xfedc_ba98_7654_3210);
-        let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
+        let bundle =
+            create_bundle(&snapshot, SaveKind::Manual).expect("valid snapshot should save");
         let metadata = bundle.metadata().expect("metadata should parse");
         assert_eq!(metadata.format_version, SAVE_FORMAT_VERSION);
         assert_eq!(metadata.save_kind, SaveKind::Manual);
@@ -542,7 +546,10 @@ mod tests {
 
     #[test]
     fn autosave_policy_requires_positive_interval_and_tracks_successful_save_day() {
-        assert_eq!(AutosavePolicy::new(0), Err(SaveError::InvalidAutosaveInterval));
+        assert_eq!(
+            AutosavePolicy::new(0),
+            Err(SaveError::InvalidAutosaveInterval)
+        );
         let policy = AutosavePolicy::new(30).expect("positive interval valid");
         assert!(!policy.is_due(29, None));
         assert!(policy.is_due(30, None));
@@ -563,9 +570,8 @@ mod tests {
     #[test]
     fn partially_initialized_spatial_state_is_rejected() {
         let mut snapshot = empty_snapshot(7);
-        snapshot.world.spatial.bounds = Some(
-            simulation_model::WorldBounds::new(0, 100, 0, 100).expect("valid bounds"),
-        );
+        snapshot.world.spatial.bounds =
+            Some(simulation_model::WorldBounds::new(0, 100, 0, 100).expect("valid bounds"));
         assert!(matches!(
             create_bundle(&snapshot, SaveKind::Manual),
             Err(SaveError::SnapshotInvariant(_))
