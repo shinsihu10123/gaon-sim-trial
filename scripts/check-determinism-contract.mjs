@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const core = readFileSync("crates/simulation-core/src/event_ledger.rs", "utf8");
 const doc = readFileSync("docs/STAGE_1_6_DETERMINISM.md", "utf8");
+const lock = readFileSync("Cargo.lock", "utf8");
 
 const requiredCoreFragments = [
   "pub fn authoritative_state_digest(&self) -> Result<u64, SaveError>",
@@ -24,9 +25,23 @@ for (const phrase of [
   "counter-based random",
   "command journal replay",
   "10,000-tick replay",
+  "Cargo.lock",
+  "--locked",
 ]) {
   if (!doc.includes(phrase)) {
     throw new Error(`Stage 1.6 documentation missing requirement: ${phrase}`);
+  }
+}
+
+for (const lockFragment of [
+  "version = 3",
+  'name = "simulation-core"',
+  'name = "simulation-save"',
+  'name = "serde"',
+  'name = "serde_json"',
+]) {
+  if (!lock.includes(lockFragment)) {
+    throw new Error(`Stage 1.6 dependency lock contract missing: ${lockFragment}`);
   }
 }
 
