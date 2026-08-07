@@ -34,8 +34,8 @@ Current integration gate:
 - Save v5 migration includes Registry allocator state and u64 IDs
 - lifecycle facts are represented in Event Ledger payloads
 - RenderSnapshot crosses the JS boundary with decimal-string entity IDs
-- rustfmt is green
-- strict Clippy model-style findings have been corrected without warning suppression
-- permanent Core/Viewer CI is now proceeding to deeper compile/test validation
+- rustfmt and model-level strict Clippy findings are resolved
+- Save validation now recognizes System command attribution explicitly
+- permanent Core/Viewer CI is proceeding into binary codec, tests and headless replay validation
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
