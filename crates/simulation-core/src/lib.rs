@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use simulation_model::{
     CommandError, CommandExecutionRecord, CommandId, CommandPayload, CommandPriority,
-    CommandRequest, CommandSource, CommandTiming, CountryId, DateBoundary, QueuedCommand,
-    SimulationDate, WorldState,
+    CommandRequest, CommandTiming, CountryId, DateBoundary, QueuedCommand, SimulationDate,
+    WorldState,
 };
 
 const NANOS_PER_SECOND: u128 = 1_000_000_000;
@@ -70,9 +70,9 @@ pub struct AdvanceReport {
 impl AdvanceReport {
     fn observe_tick(&mut self, tick: TickReport) {
         self.commands_executed += tick.commands_executed;
-        self.month_boundaries += if tick.boundary.month_changed { 1 } else { 0 };
-        self.quarter_boundaries += if tick.boundary.quarter_changed { 1 } else { 0 };
-        self.year_boundaries += if tick.boundary.year_changed { 1 } else { 0 };
+        self.month_boundaries += u64::from(tick.boundary.month_changed);
+        self.quarter_boundaries += u64::from(tick.boundary.quarter_changed);
+        self.year_boundaries += u64::from(tick.boundary.year_changed);
     }
 }
 
