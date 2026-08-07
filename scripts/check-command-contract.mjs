@@ -47,3 +47,6 @@ if (!doc.includes("(execution date, priority lane, command id)")) {
 }
 
 console.log("Stage 1.3 command contract verified");
+
+await import("./check-time-contract.mjs");
+await import("./check-event-contract.mjs");
