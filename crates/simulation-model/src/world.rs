@@ -274,12 +274,12 @@ impl WorldSpatialState {
 
         for region in &self.regions {
             for &neighbor in &region.neighbors {
-                let counterpart = self
-                    .region(neighbor)
-                    .ok_or(WorldSpatialError::UnknownNeighbor {
-                        region: region.id,
-                        neighbor,
-                    })?;
+                let counterpart =
+                    self.region(neighbor)
+                        .ok_or(WorldSpatialError::UnknownNeighbor {
+                            region: region.id,
+                            neighbor,
+                        })?;
                 if counterpart.neighbors.binary_search(&region.id).is_err() {
                     return Err(WorldSpatialError::AsymmetricAdjacency {
                         region: region.id,
@@ -452,7 +452,10 @@ mod tests {
         let spatial = WorldSpatialState::new(bounds(), line_regions(TRIAL_REGION_COUNT))
             .expect("benchmark topology should validate");
         assert_eq!(spatial.regions.len(), TRIAL_REGION_COUNT);
-        assert_eq!(spatial.region(RegionId(60)).map(|region| region.id), Some(RegionId(60)));
+        assert_eq!(
+            spatial.region(RegionId(60)).map(|region| region.id),
+            Some(RegionId(60))
+        );
     }
 
     #[test]
@@ -505,7 +508,10 @@ mod tests {
             },
         ];
         let spatial = WorldSpatialState::new(bounds(), regions).expect("sparse IDs are canonical");
-        assert_eq!(spatial.region(RegionId(20)).map(|region| region.id), Some(RegionId(20)));
+        assert_eq!(
+            spatial.region(RegionId(20)).map(|region| region.id),
+            Some(RegionId(20))
+        );
         assert!(spatial.region(RegionId(30)).is_none());
     }
 
