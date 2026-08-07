@@ -1,0 +1,209 @@
+name: Stage 2 Hydrology Schema Migration
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Apply Stage 2.2 schema migration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"expected fragment missing in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "crates/simulation-save/src/lib.rs",
+              "/// Stage 2.2 adds the canonical terrain heightfield to authoritative state.\npub const SAVE_FORMAT_VERSION: u32 = 3;",
+              "/// Stage 2.2 adds deterministic terrain, hydrology and landmass topology.\npub const SAVE_FORMAT_VERSION: u32 = 4;",
+          )
+
+          replace_once(
+              "crates/simulation-save/src/binary.rs",
+              "SimulationDate, TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,",
+              "SimulationDate, TerrainHydrology, TerrainLandmasses, TerrainSample, TerrainState, WorldBounds,\n    WorldSpatialState, WorldState,",
+          )
+
+          replace_once(
+              "crates/simulation-save/src/binary.rs",
+              "        write_biome(bytes, sample.biome);\n    }\n    Ok(())\n}\n\nfn read_terrain",
+              "        write_biome(bytes, sample.biome);\n    }\n    write_derived_geography(bytes, terrain)?;\n    Ok(())\n}\n\nfn read_terrain",
+          )
+
+          replace_once(
+              "crates/simulation-save/src/binary.rs",
+              "    let terrain = TerrainState {\n        bounds,\n        width,\n        height,\n        spacing_m,\n        sea_level_m,\n        samples,\n    };",
+              "    let (hydrology, landmasses) = read_derived_geography(cursor)?;\n    let terrain = TerrainState {\n        bounds,\n        width,\n        height,\n        spacing_m,\n        sea_level_m,\n        samples,\n        hydrology,\n        landmasses,\n    };",
+          )
+
+          marker = "fn write_relief(bytes: &mut Vec<u8>, relief: ReliefClass) {"
+          helper = r'''fn write_derived_geography(bytes: &mut Vec<u8>, terrain: &TerrainState) -> Result<(), SaveError> {
+    match (&terrain.hydrology, &terrain.landmasses) {
+        (None, None) => write_u8(bytes, 0),
+        (Some(hydrology), Some(landmasses)) => {
+            write_u8(bytes, 1);
+            write_count(bytes, "terrain_downstream", hydrology.downstream_indices.len())?;
+            for &value in &hydrology.downstream_indices {
+                write_u32(bytes, value);
+            }
+            write_count(bytes, "terrain_basins", hydrology.drainage_basin_ids.len())?;
+            for &value in &hydrology.drainage_basin_ids {
+                write_u16(bytes, value);
+            }
+            write_count(bytes, "terrain_flow", hydrology.flow_accumulation.len())?;
+            for &value in &hydrology.flow_accumulation {
+                write_u32(bytes, value);
+            }
+            write_count(bytes, "terrain_rivers", hydrology.river_orders.len())?;
+            for &value in &hydrology.river_orders {
+                write_u8(bytes, value);
+            }
+            write_count(bytes, "terrain_landmasses", landmasses.landmass_ids.len())?;
+            for &value in &landmasses.landmass_ids {
+                write_u16(bytes, value);
+            }
+            write_count(bytes, "terrain_islands", landmasses.island_landmass_ids.len())?;
+            for &value in &landmasses.island_landmass_ids {
+                write_u16(bytes, value);
+            }
+        }
+        _ => return Err(SaveError::InvalidBinary("partial terrain derived geography")),
+    }
+    Ok(())
+}
+
+fn read_derived_geography(
+    cursor: &mut Cursor<'_>,
+) -> Result<(Option<TerrainHydrology>, Option<TerrainLandmasses>), SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok((None, None)),
+        1 => {
+            let downstream_count = cursor.read_count("terrain_downstream")?;
+            let mut downstream_indices = Vec::with_capacity(downstream_count);
+            for _ in 0..downstream_count {
+                downstream_indices.push(cursor.read_u32()?);
+            }
+
+            let basin_count = cursor.read_count("terrain_basins")?;
+            let mut drainage_basin_ids = Vec::with_capacity(basin_count);
+            for _ in 0..basin_count {
+                drainage_basin_ids.push(cursor.read_u16()?);
+            }
+
+            let flow_count = cursor.read_count("terrain_flow")?;
+            let mut flow_accumulation = Vec::with_capacity(flow_count);
+            for _ in 0..flow_count {
+                flow_accumulation.push(cursor.read_u32()?);
+            }
+
+            let river_count = cursor.read_count("terrain_rivers")?;
+            let mut river_orders = Vec::with_capacity(river_count);
+            for _ in 0..river_count {
+                river_orders.push(cursor.read_u8()?);
+            }
+
+            let landmass_count = cursor.read_count("terrain_landmasses")?;
+            let mut landmass_ids = Vec::with_capacity(landmass_count);
+            for _ in 0..landmass_count {
+                landmass_ids.push(cursor.read_u16()?);
+            }
+
+            let island_count = cursor.read_count("terrain_islands")?;
+            let mut island_landmass_ids = Vec::with_capacity(island_count);
+            for _ in 0..island_count {
+                island_landmass_ids.push(cursor.read_u16()?);
+            }
+
+            Ok((
+                Some(TerrainHydrology {
+                    downstream_indices,
+                    drainage_basin_ids,
+                    flow_accumulation,
+                    river_orders,
+                }),
+                Some(TerrainLandmasses {
+                    landmass_ids,
+                    island_landmass_ids,
+                }),
+            ))
+        }
+        tag => Err(SaveError::InvalidTag {
+            field: "terrain derived geography",
+            tag,
+        }),
+    }
+}
+
+'''
+          p = Path("crates/simulation-save/src/binary.rs")
+          text = p.read_text()
+          if "fn write_derived_geography" not in text:
+              if marker not in text:
+                  raise SystemExit("binary terrain helper insertion marker missing")
+              p.write_text(text.replace(marker, helper + marker, 1))
+
+          replace_once(
+              "crates/simulation-protocol/src/lib.rs",
+              "pub const RENDER_SNAPSHOT_VERSION: u32 = 2;",
+              "pub const RENDER_SNAPSHOT_VERSION: u32 = 3;",
+          )
+          replace_once(
+              "crates/simulation-protocol/src/lib.rs",
+              "    pub relief_codes: Vec<u8>,\n    pub biome_codes: Vec<u8>,",
+              "    pub relief_codes: Vec<u8>,\n    pub biome_codes: Vec<u8>,\n    pub downstream_indices: Vec<u32>,\n    pub drainage_basin_ids: Vec<u16>,\n    pub flow_accumulation: Vec<u32>,\n    pub river_orders: Vec<u8>,\n    pub landmass_ids: Vec<u16>,\n    pub island_landmass_ids: Vec<u16>,",
+          )
+          replace_once(
+              "crates/simulation-protocol/src/lib.rs",
+              "            biome_codes: terrain\n                .samples\n                .iter()\n                .map(|sample| biome_code(sample.biome))\n                .collect(),",
+              "            biome_codes: terrain\n                .samples\n                .iter()\n                .map(|sample| biome_code(sample.biome))\n                .collect(),\n            downstream_indices: terrain.hydrology.as_ref().map_or_else(Vec::new, |value| value.downstream_indices.clone()),\n            drainage_basin_ids: terrain.hydrology.as_ref().map_or_else(Vec::new, |value| value.drainage_basin_ids.clone()),\n            flow_accumulation: terrain.hydrology.as_ref().map_or_else(Vec::new, |value| value.flow_accumulation.clone()),\n            river_orders: terrain.hydrology.as_ref().map_or_else(Vec::new, |value| value.river_orders.clone()),\n            landmass_ids: terrain.landmasses.as_ref().map_or_else(Vec::new, |value| value.landmass_ids.clone()),\n            island_landmass_ids: terrain.landmasses.as_ref().map_or_else(Vec::new, |value| value.island_landmass_ids.clone()),",
+          )
+
+          replace_once(
+              "viewer/src/types.ts",
+              "  reliefCodes: number[];\n  biomeCodes: number[];",
+              "  reliefCodes: number[];\n  biomeCodes: number[];\n  downstreamIndices: number[];\n  drainageBasinIds: number[];\n  flowAccumulation: number[];\n  riverOrders: number[];\n  landmassIds: number[];\n  islandLandmassIds: number[];",
+          )
+
+          replace_once(
+              "crates/simulation-worldgen/src/hydrology.rs",
+              ".map(|&elevation| u32::from(elevation >= 0))",
+              ".map(|&elevation| if elevation >= 0 { 1_u32 } else { 0_u32 })",
+          )
+          replace_once(
+              "crates/simulation-worldgen/src/hydrology.rs",
+              "        let side = 17;\n        let mut elevations = vec![-500_i16; side * side];\n        for z in 6..=10 {\n            for x in 6..=10 {",
+              "        let side = 25;\n        let mut elevations = vec![-500_i16; side * side];\n        for z in 10..=14 {\n            for x in 10..=14 {",
+          )
+          PY
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Normalize Rust formatting
+        run: cargo fmt --all
+      - name: Persist migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates viewer/src/types.ts
+          if git diff --cached --quiet; then
+            echo "Stage 2.2 schema already migrated"
+          else
+            git commit -m "feat(stage2): persist hydrology and landmass schema"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
