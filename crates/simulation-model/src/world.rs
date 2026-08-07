@@ -1,6 +1,9 @@
 use crate::{CountryId, RegionId};
 
-/// Fixed region count for the TEST v0.1 world.
+/// Region count used by the Standard Benchmark S fixture.
+///
+/// This constant is a benchmark preset only. The simulation core does not
+/// require an initialized world to contain this number of regions.
 pub const TRIAL_REGION_COUNT: usize = 60;
 
 /// Authoritative horizontal map coordinate in integer metres.
@@ -21,6 +24,9 @@ impl MapPoint {
 }
 
 /// Rectangular bounds of the continuous simulation world.
+///
+/// Bounds are independent from the number of regions. Region generation may
+/// choose any validated partition inside these coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorldBounds {
     pub min_x_m: i32,
@@ -98,10 +104,6 @@ impl RegionPoliticalState {
 }
 
 /// Canonical region record shared by simulation, persistence and render protocol.
-///
-/// Detailed elevation, biome, rivers, resources and infrastructure are added by
-/// later Stage 2 subsections; this type only establishes topology and political
-/// identity needed to attach those systems without changing `RegionId` semantics.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RegionState {
     pub id: RegionId,
@@ -109,15 +111,16 @@ pub struct RegionState {
     pub center: MapPoint,
     /// Ordered polygon ring. The first point is not repeated at the end.
     pub boundary: Vec<MapPoint>,
-    /// Strictly ascending, unique `RegionIds`. Adjacency must be reciprocal.
+    /// Strictly ascending, unique `RegionId`s. Adjacency must be reciprocal.
     pub neighbors: Vec<RegionId>,
     pub political: RegionPoliticalState,
 }
 
 /// Spatial layer of the authoritative world.
 ///
-/// Stage 1 engines start with `uninitialized()`. Once world generation runs in
-/// Stage 2, the state becomes a validated 60-region continuous map.
+/// Regions are stored in strictly ascending ID order. IDs need not be contiguous,
+/// so creation/removal can later be handled by the Dynamic Entity Architecture
+/// without renumbering surviving regions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldSpatialState {
     pub bounds: Option<WorldBounds>,
@@ -133,16 +136,13 @@ impl WorldSpatialState {
         }
     }
 
-    /// Constructs the canonical TEST world topology.
+    /// Constructs a canonical spatial topology with a variable region count.
     ///
     /// # Errors
     ///
-    /// Returns [`WorldSpatialError`] when region count, IDs, geometry, political
-    /// ownership or adjacency invariants are violated.
-    pub fn new_trial(
-        bounds: WorldBounds,
-        regions: Vec<RegionState>,
-    ) -> Result<Self, WorldSpatialError> {
+    /// Returns [`WorldSpatialError`] when IDs, geometry, political ownership or
+    /// adjacency invariants are violated.
+    pub fn new(bounds: WorldBounds, regions: Vec<RegionState>) -> Result<Self, WorldSpatialError> {
         let spatial = Self {
             bounds: Some(bounds),
             regions,
@@ -151,24 +151,44 @@ impl WorldSpatialState {
         Ok(spatial)
     }
 
+    /// Backward-compatible constructor retained for benchmark fixtures.
+    ///
+    /// This does not enforce [`TRIAL_REGION_COUNT`]; the benchmark caller chooses
+    /// the count explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same spatial validation errors as [`Self::new`].
+    pub fn new_trial(
+        bounds: WorldBounds,
+        regions: Vec<RegionState>,
+    ) -> Result<Self, WorldSpatialError> {
+        Self::new(bounds, regions)
+    }
+
     #[must_use]
     pub fn is_initialized(&self) -> bool {
         self.bounds.is_some()
     }
 
+    /// Looks up a region by stable ID without assuming contiguous identifiers.
     #[must_use]
     pub fn region(&self, id: RegionId) -> Option<&RegionState> {
         if id.0 == 0 {
             return None;
         }
-        self.regions.get(usize::from(id.0 - 1))
+        self.regions
+            .binary_search_by_key(&id, |region| region.id)
+            .ok()
+            .and_then(|index| self.regions.get(index))
     }
 
-    /// Validates canonical Stage 2.1 topology.
+    /// Validates canonical dynamic-region topology.
     ///
-    /// An entirely empty `(None, [])` state is the only valid uninitialized
-    /// representation. Any initialized representation must contain exactly 60
-    /// regions with IDs 1..=60 in vector order.
+    /// An entirely empty `(None, [])` state is the only uninitialized form.
+    /// Initialized states may contain any positive region count representable by
+    /// the collection. Region IDs must be non-zero, unique and strictly ascending,
+    /// but are not required to be contiguous.
     ///
     /// # Errors
     ///
@@ -192,28 +212,27 @@ impl WorldSpatialState {
             }
         }
 
-        if self.regions.len() != TRIAL_REGION_COUNT {
-            return Err(WorldSpatialError::WrongRegionCount {
-                found: self.regions.len(),
-            });
-        }
-
         let Some(bounds) = self.bounds else {
             return Err(WorldSpatialError::PartialInitialization);
         };
+        if self.regions.is_empty() {
+            return Err(WorldSpatialError::PartialInitialization);
+        }
 
-        for (index, region) in self.regions.iter().enumerate() {
-            let Ok(expected) = u16::try_from(index + 1) else {
-                return Err(WorldSpatialError::WrongRegionCount {
-                    found: self.regions.len(),
-                });
-            };
-            if region.id != RegionId(expected) {
-                return Err(WorldSpatialError::NonCanonicalRegionId {
-                    expected: RegionId(expected),
-                    found: region.id,
-                });
+        let mut previous_region_id = None;
+        for region in &self.regions {
+            if region.id.0 == 0 {
+                return Err(WorldSpatialError::InvalidRegionId { found: region.id });
             }
+            if let Some(previous) = previous_region_id {
+                if previous >= region.id {
+                    return Err(WorldSpatialError::NonCanonicalRegionOrder {
+                        previous,
+                        found: region.id,
+                    });
+                }
+            }
+            previous_region_id = Some(region.id);
 
             if !bounds.contains(region.center) {
                 return Err(WorldSpatialError::PointOutsideBounds { region: region.id });
@@ -225,21 +244,21 @@ impl WorldSpatialState {
                 return Err(WorldSpatialError::PointOutsideBounds { region: region.id });
             }
 
-            let mut previous = None;
+            let mut previous_neighbor = None;
             for &neighbor in &region.neighbors {
                 if neighbor == region.id {
                     return Err(WorldSpatialError::SelfNeighbor { region: region.id });
                 }
-                if neighbor.0 == 0 || usize::from(neighbor.0) > TRIAL_REGION_COUNT {
+                if neighbor.0 == 0 || self.region(neighbor).is_none() {
                     return Err(WorldSpatialError::UnknownNeighbor {
                         region: region.id,
                         neighbor,
                     });
                 }
-                if previous.is_some_and(|previous| previous >= neighbor) {
+                if previous_neighbor.is_some_and(|previous| previous >= neighbor) {
                     return Err(WorldSpatialError::NonCanonicalNeighborOrder { region: region.id });
                 }
-                previous = Some(neighbor);
+                previous_neighbor = Some(neighbor);
             }
 
             if region.surface == RegionSurface::Ocean
@@ -285,11 +304,11 @@ impl WorldSpatialState {
 pub enum WorldSpatialError {
     InvalidBounds,
     PartialInitialization,
-    WrongRegionCount {
-        found: usize,
+    InvalidRegionId {
+        found: RegionId,
     },
-    NonCanonicalRegionId {
-        expected: RegionId,
+    NonCanonicalRegionOrder {
+        previous: RegionId,
         found: RegionId,
     },
     BoundaryTooShort {
@@ -330,36 +349,29 @@ impl core::fmt::Display for WorldSpatialError {
             Self::PartialInitialization => {
                 formatter.write_str("world spatial state is only partially initialized")
             }
-            Self::WrongRegionCount { found } => write!(
+            Self::InvalidRegionId { found } => {
+                write!(formatter, "region id {} is invalid", found.0)
+            }
+            Self::NonCanonicalRegionOrder { previous, found } => write!(
                 formatter,
-                "trial world requires {TRIAL_REGION_COUNT} regions, found {found}"
+                "region ids must be strictly ascending: {} before {}",
+                previous.0, found.0
             ),
-            Self::NonCanonicalRegionId { expected, found } => write!(
+            Self::BoundaryTooShort { region } => write!(
                 formatter,
-                "expected region id {}, found {}",
-                expected.0, found.0
+                "region {} boundary needs at least 3 points",
+                region.0
             ),
-            Self::BoundaryTooShort { region } => {
-                write!(
-                    formatter,
-                    "region {} boundary needs at least 3 points",
-                    region.0
-                )
-            }
-            Self::PointOutsideBounds { region } => {
-                write!(
-                    formatter,
-                    "region {} has a point outside world bounds",
-                    region.0
-                )
-            }
-            Self::SelfNeighbor { region } => {
-                write!(
-                    formatter,
-                    "region {} references itself as a neighbor",
-                    region.0
-                )
-            }
+            Self::PointOutsideBounds { region } => write!(
+                formatter,
+                "region {} has a point outside world bounds",
+                region.0
+            ),
+            Self::SelfNeighbor { region } => write!(
+                formatter,
+                "region {} references itself as a neighbor",
+                region.0
+            ),
             Self::UnknownNeighbor { region, neighbor } => write!(
                 formatter,
                 "region {} references unknown neighbor {}",
@@ -377,7 +389,7 @@ impl core::fmt::Display for WorldSpatialError {
             ),
             Self::OceanHasPoliticalOwner { region } => write!(
                 formatter,
-                "ocean region {} cannot have legal ownership or control in Stage 2.1",
+                "ocean region {} cannot have legal ownership or control",
                 region.0
             ),
             Self::ControllerWithoutOwner { region } => write!(
@@ -402,16 +414,16 @@ mod tests {
     };
     use crate::{CountryId, RegionId};
 
-    fn trial_regions() -> Vec<RegionState> {
-        (1..=TRIAL_REGION_COUNT)
+    fn line_regions(count: usize) -> Vec<RegionState> {
+        (1..=count)
             .map(|index| {
-                let id = RegionId(u16::try_from(index).expect("trial id fits u16"));
-                let x = i32::try_from(index).expect("trial index fits i32") * 100;
+                let id = RegionId(u16::try_from(index).expect("fixture id fits u16"));
+                let x = i32::try_from(index).expect("fixture index fits i32") * 100;
                 let mut neighbors = Vec::new();
                 if index > 1 {
                     neighbors.push(RegionId(u16::try_from(index - 1).expect("id fits u16")));
                 }
-                if index < TRIAL_REGION_COUNT {
+                if index < count {
                     neighbors.push(RegionId(u16::try_from(index + 1).expect("id fits u16")));
                 }
                 RegionState {
@@ -430,6 +442,10 @@ mod tests {
             .collect()
     }
 
+    fn bounds() -> WorldBounds {
+        WorldBounds::new(0, 20_000, 0, 20_000).expect("bounds are valid")
+    }
+
     #[test]
     fn uninitialized_world_has_one_canonical_representation() {
         let spatial = WorldSpatialState::uninitialized();
@@ -439,38 +455,114 @@ mod tests {
     }
 
     #[test]
-    fn canonical_sixty_region_topology_validates() {
-        let bounds = WorldBounds::new(0, 10_000, 0, 10_000).expect("bounds are valid");
-        let spatial = WorldSpatialState::new_trial(bounds, trial_regions())
-            .expect("canonical trial topology should validate");
-        assert!(spatial.is_initialized());
-        assert_eq!(spatial.regions.len(), 60);
+    fn benchmark_sixty_region_topology_still_validates() {
+        let spatial = WorldSpatialState::new(bounds(), line_regions(TRIAL_REGION_COUNT))
+            .expect("benchmark topology should validate");
+        assert_eq!(spatial.regions.len(), TRIAL_REGION_COUNT);
         assert_eq!(
-            spatial.region(RegionId(60)).expect("region exists").id,
-            RegionId(60)
+            spatial.region(RegionId(60)).map(|region| region.id),
+            Some(RegionId(60))
         );
     }
 
     #[test]
+    fn variable_region_counts_validate() {
+        for count in [1, 3, 75] {
+            let spatial = WorldSpatialState::new(bounds(), line_regions(count))
+                .expect("region count must not be a core invariant");
+            assert_eq!(spatial.regions.len(), count);
+        }
+    }
+
+    #[test]
+    fn sparse_region_ids_are_valid_and_lookup_is_id_based() {
+        let regions = vec![
+            RegionState {
+                id: RegionId(10),
+                surface: RegionSurface::Land,
+                center: MapPoint::new(100, 100),
+                boundary: vec![
+                    MapPoint::new(80, 80),
+                    MapPoint::new(120, 80),
+                    MapPoint::new(100, 120),
+                ],
+                neighbors: vec![RegionId(20)],
+                political: RegionPoliticalState::unclaimed(),
+            },
+            RegionState {
+                id: RegionId(20),
+                surface: RegionSurface::Land,
+                center: MapPoint::new(200, 100),
+                boundary: vec![
+                    MapPoint::new(180, 80),
+                    MapPoint::new(220, 80),
+                    MapPoint::new(200, 120),
+                ],
+                neighbors: vec![RegionId(10), RegionId(40)],
+                political: RegionPoliticalState::unclaimed(),
+            },
+            RegionState {
+                id: RegionId(40),
+                surface: RegionSurface::Land,
+                center: MapPoint::new(300, 100),
+                boundary: vec![
+                    MapPoint::new(280, 80),
+                    MapPoint::new(320, 80),
+                    MapPoint::new(300, 120),
+                ],
+                neighbors: vec![RegionId(20)],
+                political: RegionPoliticalState::unclaimed(),
+            },
+        ];
+        let spatial = WorldSpatialState::new(bounds(), regions).expect("sparse IDs are canonical");
+        assert_eq!(
+            spatial.region(RegionId(20)).map(|region| region.id),
+            Some(RegionId(20))
+        );
+        assert!(spatial.region(RegionId(30)).is_none());
+    }
+
+    #[test]
+    fn region_ids_must_be_strictly_sorted() {
+        let mut regions = line_regions(3);
+        regions.swap(0, 1);
+        assert!(matches!(
+            WorldSpatialState::new(bounds(), regions),
+            Err(WorldSpatialError::NonCanonicalRegionOrder { .. })
+        ));
+    }
+
+    #[test]
+    fn adjacency_must_reference_existing_regions() {
+        let mut regions = line_regions(3);
+        regions[2].neighbors.push(RegionId(60));
+        assert!(matches!(
+            WorldSpatialState::new(bounds(), regions),
+            Err(WorldSpatialError::UnknownNeighbor {
+                region: RegionId(3),
+                neighbor: RegionId(60)
+            })
+        ));
+    }
+
+    #[test]
     fn adjacency_must_be_reciprocal() {
-        let bounds = WorldBounds::new(0, 10_000, 0, 10_000).expect("bounds are valid");
-        let mut regions = trial_regions();
+        let mut regions = line_regions(3);
         regions[1].neighbors.clear();
         assert!(matches!(
-            WorldSpatialState::new_trial(bounds, regions),
+            WorldSpatialState::new(bounds(), regions),
             Err(WorldSpatialError::AsymmetricAdjacency { .. })
         ));
     }
 
     #[test]
     fn legal_owner_and_controller_are_distinct_fields() {
-        let bounds = WorldBounds::new(0, 10_000, 0, 10_000).expect("bounds are valid");
-        let mut regions = trial_regions();
+        let mut regions = line_regions(3);
         regions[0].political = RegionPoliticalState {
             legal_owner: Some(CountryId(1)),
             controller: Some(CountryId(2)),
         };
-        let spatial = WorldSpatialState::new_trial(bounds, regions)
+        let spatial = WorldSpatialState::new(bounds(), regions)
             .expect("occupation-style owner/controller split is valid");
         let first = spatial.region(RegionId(1)).expect("region exists");
         assert_eq!(first.political.legal_owner, Some(CountryId(1)));
@@ -478,13 +570,12 @@ mod tests {
     }
 
     #[test]
-    fn ocean_region_cannot_be_owned_in_stage_two_one() {
-        let bounds = WorldBounds::new(0, 10_000, 0, 10_000).expect("bounds are valid");
-        let mut regions = trial_regions();
+    fn ocean_region_cannot_be_owned() {
+        let mut regions = line_regions(3);
         regions[0].surface = RegionSurface::Ocean;
         regions[0].political = RegionPoliticalState::sovereign(CountryId(1));
         assert!(matches!(
-            WorldSpatialState::new_trial(bounds, regions),
+            WorldSpatialState::new(bounds(), regions),
             Err(WorldSpatialError::OceanHasPoliticalOwner {
                 region: RegionId(1)
             })
