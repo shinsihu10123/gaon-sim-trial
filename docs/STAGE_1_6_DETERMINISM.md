@@ -71,6 +71,8 @@ Malformed journals fail replay rather than being silently normalized. Examples i
 
 Reproducibility also requires dependency resolution to remain stable for a given source revision. Stage 1.6 therefore requires the workspace `Cargo.lock` produced by the validated CI dependency resolution to be committed to the repository.
 
+The committed lockfile uses Cargo lock format version `3` and is copied from the dependency graph resolved by the passing GitHub Actions environment, including the exact registry checksums rather than hand-estimated package data.
+
 After the lockfile is committed, CI must build and test with `--locked`. A source revision whose manifest and lockfile disagree is considered invalid rather than silently resolving a different dependency graph.
 
 ## Required validation
