@@ -36,6 +36,6 @@ Current integration gate:
 - RenderSnapshot crosses the JS boundary with decimal-string entity IDs
 - rustfmt is green
 - first strict Clippy findings were remediated without suppressing warnings
-- permanent Core/Viewer CI is rerunning on the cleaned integrated head
+- final two model-style Clippy findings are being normalized before full compile/test validation
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
