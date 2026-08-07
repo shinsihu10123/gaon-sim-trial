@@ -22,6 +22,12 @@ export interface RenderTerrainSnapshot {
   moisturePermille: number[];
   reliefCodes: number[];
   biomeCodes: number[];
+  downstreamIndices: number[];
+  drainageBasinIds: number[];
+  flowAccumulation: number[];
+  riverOrders: number[];
+  landmassIds: number[];
+  islandLandmassIds: number[];
 }
 
 export interface RenderMapPoint {
