@@ -1,0 +1,30 @@
+name: Stage 2.4 lock refresh
+
+on:
+  push:
+    branches: [feature/stage-2-4-resources]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stage-2-4-resources
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Regenerate exact Cargo lockfile
+        run: cargo generate-lockfile
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/stage-2-4-lock.yml
+      - name: Commit resolved lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock .github/workflows/stage-2-4-lock.yml
+          git commit -m "chore(stage2.4): refresh Cargo lockfile" || exit 0
+          git push origin HEAD:feature/stage-2-4-resources
