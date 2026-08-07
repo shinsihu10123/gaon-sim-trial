@@ -226,9 +226,7 @@ impl WorldSpatialState {
                     });
                 }
                 if previous.is_some_and(|previous| previous >= neighbor) {
-                    return Err(WorldSpatialError::NonCanonicalNeighborOrder {
-                        region: region.id,
-                    });
+                    return Err(WorldSpatialError::NonCanonicalNeighborOrder { region: region.id });
                 }
                 previous = Some(neighbor);
             }
@@ -253,12 +251,12 @@ impl WorldSpatialState {
 
         for region in &self.regions {
             for &neighbor in &region.neighbors {
-                let counterpart = self
-                    .region(neighbor)
-                    .ok_or(WorldSpatialError::UnknownNeighbor {
-                        region: region.id,
-                        neighbor,
-                    })?;
+                let counterpart =
+                    self.region(neighbor)
+                        .ok_or(WorldSpatialError::UnknownNeighbor {
+                            region: region.id,
+                            neighbor,
+                        })?;
                 if counterpart.neighbors.binary_search(&region.id).is_err() {
                     return Err(WorldSpatialError::AsymmetricAdjacency {
                         region: region.id,
@@ -276,17 +274,42 @@ impl WorldSpatialState {
 pub enum WorldSpatialError {
     InvalidBounds,
     PartialInitialization,
-    WrongRegionCount { found: usize },
-    NonCanonicalRegionId { expected: RegionId, found: RegionId },
-    BoundaryTooShort { region: RegionId },
-    PointOutsideBounds { region: RegionId },
-    SelfNeighbor { region: RegionId },
-    UnknownNeighbor { region: RegionId, neighbor: RegionId },
-    NonCanonicalNeighborOrder { region: RegionId },
-    AsymmetricAdjacency { region: RegionId, neighbor: RegionId },
-    OceanHasPoliticalOwner { region: RegionId },
-    ControllerWithoutOwner { region: RegionId },
-    InvalidCountryId { region: RegionId },
+    WrongRegionCount {
+        found: usize,
+    },
+    NonCanonicalRegionId {
+        expected: RegionId,
+        found: RegionId,
+    },
+    BoundaryTooShort {
+        region: RegionId,
+    },
+    PointOutsideBounds {
+        region: RegionId,
+    },
+    SelfNeighbor {
+        region: RegionId,
+    },
+    UnknownNeighbor {
+        region: RegionId,
+        neighbor: RegionId,
+    },
+    NonCanonicalNeighborOrder {
+        region: RegionId,
+    },
+    AsymmetricAdjacency {
+        region: RegionId,
+        neighbor: RegionId,
+    },
+    OceanHasPoliticalOwner {
+        region: RegionId,
+    },
+    ControllerWithoutOwner {
+        region: RegionId,
+    },
+    InvalidCountryId {
+        region: RegionId,
+    },
 }
 
 impl core::fmt::Display for WorldSpatialError {
@@ -306,13 +329,25 @@ impl core::fmt::Display for WorldSpatialError {
                 expected.0, found.0
             ),
             Self::BoundaryTooShort { region } => {
-                write!(formatter, "region {} boundary needs at least 3 points", region.0)
+                write!(
+                    formatter,
+                    "region {} boundary needs at least 3 points",
+                    region.0
+                )
             }
             Self::PointOutsideBounds { region } => {
-                write!(formatter, "region {} has a point outside world bounds", region.0)
+                write!(
+                    formatter,
+                    "region {} has a point outside world bounds",
+                    region.0
+                )
             }
             Self::SelfNeighbor { region } => {
-                write!(formatter, "region {} references itself as a neighbor", region.0)
+                write!(
+                    formatter,
+                    "region {} references itself as a neighbor",
+                    region.0
+                )
             }
             Self::UnknownNeighbor { region, neighbor } => write!(
                 formatter,
@@ -399,7 +434,10 @@ mod tests {
             .expect("canonical trial topology should validate");
         assert!(spatial.is_initialized());
         assert_eq!(spatial.regions.len(), 60);
-        assert_eq!(spatial.region(RegionId(60)).expect("region exists").id, RegionId(60));
+        assert_eq!(
+            spatial.region(RegionId(60)).expect("region exists").id,
+            RegionId(60)
+        );
     }
 
     #[test]
@@ -436,7 +474,9 @@ mod tests {
         regions[0].political = RegionPoliticalState::sovereign(CountryId(1));
         assert!(matches!(
             WorldSpatialState::new_trial(bounds, regions),
-            Err(WorldSpatialError::OceanHasPoliticalOwner { region: RegionId(1) })
+            Err(WorldSpatialError::OceanHasPoliticalOwner {
+                region: RegionId(1)
+            })
         ));
     }
 }
