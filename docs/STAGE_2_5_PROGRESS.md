@@ -34,6 +34,7 @@ Current integration gate:
 - Save v5 migration includes Registry allocator state and u64 IDs
 - lifecycle facts are represented in Event Ledger payloads
 - RenderSnapshot crosses the JS boundary with decimal-string entity IDs
-- permanent Core/Viewer CI is now validating the integrated head
+- first integrated rustfmt gate passed
+- first strict Clippy run identified only model-expression/style issues; remediation is being applied before full compile/test validation
 
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
