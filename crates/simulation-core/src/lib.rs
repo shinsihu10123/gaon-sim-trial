@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod entity_lifecycle;
 mod event_ledger;
 
 use std::time::Duration;
@@ -168,6 +169,18 @@ impl SimulationEngine {
         Ok(id)
     }
 
+    /// Submits a system-originated deterministic lifecycle command.
+    ///
+    /// # Errors
+    /// Returns [`CommandError`] under the same scheduling rules as other commands.
+    pub fn submit_system_command(
+        &mut self,
+        timing: CommandTiming,
+        payload: CommandPayload,
+    ) -> Result<CommandId, CommandError> {
+        self.submit_command(CommandRequest::system(timing, payload))
+    }
+
     /// Submits a user-originated command using the user intervention priority.
     ///
     /// # Errors
@@ -241,16 +254,27 @@ impl SimulationEngine {
         let command_id = command.id;
         let command_source = command.source;
 
-        match &command.payload {
-            CommandPayload::NoOp { .. } => {}
-        }
+        let lifecycle_event = self.apply_entity_payload(&command.payload).ok().flatten();
 
         self.executed_commands.push(CommandExecutionRecord {
             command,
             executed_on,
         });
 
+        if let Some(payload) = lifecycle_event {
+            self.event_ledger.append(
+                executed_on,
+                self.state.elapsed_days,
+                EventDraft {
+                    category: EventCategory::EntityLifecycle,
+                    source: EventSource::System,
+                    payload,
+                },
+            );
+        }
+
         let (category, source) = match command_source {
+            CommandSource::System => (EventCategory::System, EventSource::System),
             CommandSource::User => (EventCategory::UserIntervention, EventSource::User),
             CommandSource::CountryAi(country_id) => {
                 (EventCategory::System, EventSource::Country(country_id))

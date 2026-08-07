@@ -10,8 +10,8 @@ use simulation_model::{
     EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
 };
 
-/// Stage 2.4 adds finite resource stocks to authoritative state.
-pub const SAVE_FORMAT_VERSION: u32 = 4;
+/// Stage 2.5 adds dynamic entity registries and stable allocator state.
+pub const SAVE_FORMAT_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -327,6 +327,33 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
             "world spatial state violates Stage 2.1 topology invariants",
         ));
     }
+
+    use simulation_model::EntityRegistry as _;
+    for region in world.spatial.regions.iter() {
+        for country in [region.political.legal_owner, region.political.controller]
+            .into_iter()
+            .flatten()
+        {
+            if !world.entities.countries.contains(country) {
+                return Err(SaveError::SnapshotInvariant(
+                    "Region references an unknown active country",
+                ));
+            }
+        }
+    }
+    for city in world.entities.cities.iter() {
+        if city
+            .country
+            .is_some_and(|country| !world.entities.countries.contains(country))
+            || city
+                .region
+                .is_some_and(|region| world.spatial.region(region).is_none())
+        {
+            return Err(SaveError::SnapshotInvariant(
+                "City references an unknown active entity",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -422,6 +449,16 @@ fn validate_events(
                     ));
                 }
                 validate_command_event_attribution(event, *source)?;
+            }
+            EventPayload::EntityCreated { entity } | EventPayload::EntityRemoved { entity } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                    || !entity.id.is_valid()
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity lifecycle event attribution is invalid",
+                    ));
+                }
             }
         }
     }

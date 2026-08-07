@@ -256,10 +256,7 @@ impl CityRegistry {
     /// # Errors
     ///
     /// Returns [`EntityRegistryError`] for invalid IDs or allocator state.
-    pub fn from_parts(
-        next_id: u64,
-        records: Vec<CityEntity>,
-    ) -> Result<Self, EntityRegistryError> {
+    pub fn from_parts(next_id: u64, records: Vec<CityEntity>) -> Result<Self, EntityRegistryError> {
         let mut entries = BTreeMap::new();
         for record in records {
             if record.id.0 == 0 {

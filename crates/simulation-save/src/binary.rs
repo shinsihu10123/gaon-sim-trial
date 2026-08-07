@@ -1,9 +1,11 @@
 use simulation_model::{
-    BiomeClass, CommandExecutionRecord, CommandId, CommandPayload, CommandPriority, CommandSource,
-    CountryId, EventCategory, EventId, EventPayload, EventRecord, EventSource, MapPoint,
-    QueuedCommand, RegionId, RegionPoliticalState, RegionState, RegionSurface, ReliefClass,
-    ResourceCellState, ResourceDeposit, ResourceFieldState, SimulationDate, TerrainSample,
-    TerrainState, WorldBounds, WorldSpatialState, WorldState,
+    BiomeClass, CityEntity, CityId, CityRegistry, CommandExecutionRecord, CommandId,
+    CommandPayload, CommandPriority, CommandSource, CountryEntity, CountryId, CountryRegistry,
+    EntityKind, EntityRef, EntityRegistry, EntityWorldState, EventCategory, EventId, EventPayload,
+    EventRecord, EventSource, MapPoint, QueuedCommand, RegionDraft, RegionId, RegionPoliticalState,
+    RegionRegistry, RegionState, RegionSurface, ReliefClass, ResourceCellState, ResourceDeposit,
+    ResourceFieldState, SimulationDate, StableEntityId, TerrainSample, TerrainState, WorldBounds,
+    WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -122,11 +124,26 @@ fn write_world(bytes: &mut Vec<u8>, world: &WorldState) -> Result<(), SaveError>
             write_i32(bytes, bounds.max_x_m);
             write_i32(bytes, bounds.min_z_m);
             write_i32(bytes, bounds.max_z_m);
+            write_u64(bytes, world.spatial.regions.next_id());
             write_count(bytes, "regions", world.spatial.regions.len())?;
             for region in &world.spatial.regions {
                 write_region(bytes, region)?;
             }
         }
+    }
+
+    write_u64(bytes, world.entities.countries.next_id());
+    write_count(bytes, "countries", world.entities.countries.len())?;
+    for country in world.entities.countries.iter() {
+        write_u64(bytes, country.id.0);
+    }
+
+    write_u64(bytes, world.entities.cities.next_id());
+    write_count(bytes, "cities", world.entities.cities.len())?;
+    for city in world.entities.cities.iter() {
+        write_u64(bytes, city.id.0);
+        write_optional_country(bytes, city.country);
+        write_optional_region(bytes, city.region);
     }
 
     Ok(())
@@ -169,12 +186,15 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
                 cursor.read_i32()?,
             )
             .map_err(|_| SaveError::InvalidBinary("invalid world bounds"))?;
+            let region_next_id = cursor.read_u64()?;
             let region_count = cursor.read_count("regions")?;
             let mut regions = Vec::with_capacity(region_count);
             for _ in 0..region_count {
                 regions.push(read_region(cursor)?);
             }
-            WorldSpatialState::new_trial(bounds, regions)
+            let registry = RegionRegistry::from_parts(region_next_id, regions)
+                .map_err(|_| SaveError::InvalidBinary("invalid Region registry"))?;
+            WorldSpatialState::from_registry(bounds, registry)
                 .map_err(|_| SaveError::InvalidBinary("invalid world spatial state"))?
         }
         tag => {
@@ -185,6 +205,30 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
         }
     };
 
+    let country_next_id = cursor.read_u64()?;
+    let country_count = cursor.read_count("countries")?;
+    let mut countries = Vec::with_capacity(country_count);
+    for _ in 0..country_count {
+        countries.push(CountryEntity {
+            id: CountryId(cursor.read_u64()?),
+        });
+    }
+    let countries = CountryRegistry::from_parts(country_next_id, countries)
+        .map_err(|_| SaveError::InvalidBinary("invalid Country registry"))?;
+
+    let city_next_id = cursor.read_u64()?;
+    let city_count = cursor.read_count("cities")?;
+    let mut cities = Vec::with_capacity(city_count);
+    for _ in 0..city_count {
+        cities.push(CityEntity {
+            id: CityId(cursor.read_u64()?),
+            country: read_optional_country(cursor)?,
+            region: read_optional_region(cursor)?,
+        });
+    }
+    let cities = CityRegistry::from_parts(city_next_id, cities)
+        .map_err(|_| SaveError::InvalidBinary("invalid City registry"))?;
+
     Ok(WorldState {
         date,
         elapsed_days,
@@ -192,6 +236,7 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
         terrain,
         resources,
         spatial,
+        entities: EntityWorldState { countries, cities },
     })
 }
 
@@ -355,7 +400,7 @@ fn read_biome(cursor: &mut Cursor<'_>) -> Result<BiomeClass, SaveError> {
 }
 
 fn write_region(bytes: &mut Vec<u8>, region: &RegionState) -> Result<(), SaveError> {
-    write_u16(bytes, region.id.0);
+    write_u64(bytes, region.id.0);
     write_region_surface(bytes, region.surface);
     write_point(bytes, region.center);
 
@@ -366,7 +411,7 @@ fn write_region(bytes: &mut Vec<u8>, region: &RegionState) -> Result<(), SaveErr
 
     write_count(bytes, "region_neighbors", region.neighbors.len())?;
     for &neighbor in &region.neighbors {
-        write_u16(bytes, neighbor.0);
+        write_u64(bytes, neighbor.0);
     }
 
     write_optional_country(bytes, region.political.legal_owner);
@@ -375,7 +420,7 @@ fn write_region(bytes: &mut Vec<u8>, region: &RegionState) -> Result<(), SaveErr
 }
 
 fn read_region(cursor: &mut Cursor<'_>) -> Result<RegionState, SaveError> {
-    let id = RegionId(cursor.read_u16()?);
+    let id = RegionId(cursor.read_u64()?);
     let surface = read_region_surface(cursor)?;
     let center = read_point(cursor)?;
 
@@ -388,7 +433,7 @@ fn read_region(cursor: &mut Cursor<'_>) -> Result<RegionState, SaveError> {
     let neighbor_count = cursor.read_count("region_neighbors")?;
     let mut neighbors = Vec::with_capacity(neighbor_count);
     for _ in 0..neighbor_count {
-        neighbors.push(RegionId(cursor.read_u16()?));
+        neighbors.push(RegionId(cursor.read_u64()?));
     }
 
     let legal_owner = read_optional_country(cursor)?;
@@ -442,7 +487,7 @@ fn write_optional_country(bytes: &mut Vec<u8>, country: Option<CountryId>) {
         None => write_u8(bytes, 0),
         Some(country) => {
             write_u8(bytes, 1);
-            write_u16(bytes, country.0);
+            write_u64(bytes, country.0);
         }
     }
 }
@@ -450,12 +495,74 @@ fn write_optional_country(bytes: &mut Vec<u8>, country: Option<CountryId>) {
 fn read_optional_country(cursor: &mut Cursor<'_>) -> Result<Option<CountryId>, SaveError> {
     match cursor.read_u8()? {
         0 => Ok(None),
-        1 => Ok(Some(CountryId(cursor.read_u16()?))),
+        1 => Ok(Some(CountryId(cursor.read_u64()?))),
         tag => Err(SaveError::InvalidTag {
             field: "optional country",
             tag,
         }),
     }
+}
+
+fn write_optional_region(bytes: &mut Vec<u8>, region: Option<RegionId>) {
+    match region {
+        None => write_u8(bytes, 0),
+        Some(region) => {
+            write_u8(bytes, 1);
+            write_u64(bytes, region.0);
+        }
+    }
+}
+
+fn read_optional_region(cursor: &mut Cursor<'_>) -> Result<Option<RegionId>, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(None),
+        1 => Ok(Some(RegionId(cursor.read_u64()?))),
+        tag => Err(SaveError::InvalidTag {
+            field: "optional Region",
+            tag,
+        }),
+    }
+}
+
+fn write_region_draft(bytes: &mut Vec<u8>, draft: &RegionDraft) -> Result<(), SaveError> {
+    write_region_surface(bytes, draft.surface);
+    write_point(bytes, draft.center);
+    write_count(bytes, "draft_boundary_points", draft.boundary.len())?;
+    for &point in &draft.boundary {
+        write_point(bytes, point);
+    }
+    write_count(bytes, "draft_neighbors", draft.neighbors.len())?;
+    for &neighbor in &draft.neighbors {
+        write_u64(bytes, neighbor.0);
+    }
+    write_optional_country(bytes, draft.political.legal_owner);
+    write_optional_country(bytes, draft.political.controller);
+    Ok(())
+}
+
+fn read_region_draft(cursor: &mut Cursor<'_>) -> Result<RegionDraft, SaveError> {
+    let surface = read_region_surface(cursor)?;
+    let center = read_point(cursor)?;
+    let boundary_count = cursor.read_count("draft_boundary_points")?;
+    let mut boundary = Vec::with_capacity(boundary_count);
+    for _ in 0..boundary_count {
+        boundary.push(read_point(cursor)?);
+    }
+    let neighbor_count = cursor.read_count("draft_neighbors")?;
+    let mut neighbors = Vec::with_capacity(neighbor_count);
+    for _ in 0..neighbor_count {
+        neighbors.push(RegionId(cursor.read_u64()?));
+    }
+    Ok(RegionDraft {
+        surface,
+        center,
+        boundary,
+        neighbors,
+        political: RegionPoliticalState {
+            legal_owner: read_optional_country(cursor)?,
+            controller: read_optional_country(cursor)?,
+        },
+    })
 }
 
 fn write_queued_command(bytes: &mut Vec<u8>, command: &QueuedCommand) {
@@ -512,18 +619,20 @@ fn read_event_record(cursor: &mut Cursor<'_>) -> Result<EventRecord, SaveError> 
 
 fn write_command_source(bytes: &mut Vec<u8>, source: CommandSource) {
     match source {
-        CommandSource::User => write_u8(bytes, 0),
+        CommandSource::System => write_u8(bytes, 0),
+        CommandSource::User => write_u8(bytes, 1),
         CommandSource::CountryAi(country_id) => {
-            write_u8(bytes, 1);
-            write_u16(bytes, country_id.0);
+            write_u8(bytes, 2);
+            write_u64(bytes, country_id.0);
         }
     }
 }
 
 fn read_command_source(cursor: &mut Cursor<'_>) -> Result<CommandSource, SaveError> {
     match cursor.read_u8()? {
-        0 => Ok(CommandSource::User),
-        1 => Ok(CommandSource::CountryAi(CountryId(cursor.read_u16()?))),
+        0 => Ok(CommandSource::System),
+        1 => Ok(CommandSource::User),
+        2 => Ok(CommandSource::CountryAi(CountryId(cursor.read_u64()?))),
         tag => Err(SaveError::InvalidTag {
             field: "command source",
             tag,
@@ -533,6 +642,7 @@ fn read_command_source(cursor: &mut Cursor<'_>) -> Result<CommandSource, SaveErr
 
 fn write_command_priority(bytes: &mut Vec<u8>, priority: CommandPriority) {
     let tag = match priority {
+        CommandPriority::System => 0,
         CommandPriority::UserIntervention => 10,
         CommandPriority::CountryAi => 20,
     };
@@ -541,6 +651,7 @@ fn write_command_priority(bytes: &mut Vec<u8>, priority: CommandPriority) {
 
 fn read_command_priority(cursor: &mut Cursor<'_>) -> Result<CommandPriority, SaveError> {
     match cursor.read_u8()? {
+        0 => Ok(CommandPriority::System),
         10 => Ok(CommandPriority::UserIntervention),
         20 => Ok(CommandPriority::CountryAi),
         tag => Err(SaveError::InvalidTag {
@@ -556,6 +667,31 @@ fn write_command_payload(bytes: &mut Vec<u8>, payload: &CommandPayload) {
             write_u8(bytes, 0);
             write_u64(bytes, *token);
         }
+        CommandPayload::CreateCountryEntity => write_u8(bytes, 1),
+        CommandPayload::RemoveCountryEntity { country_id } => {
+            write_u8(bytes, 2);
+            write_u64(bytes, country_id.0);
+        }
+        CommandPayload::CreateCityEntity {
+            country_id,
+            region_id,
+        } => {
+            write_u8(bytes, 3);
+            write_optional_country(bytes, *country_id);
+            write_optional_region(bytes, *region_id);
+        }
+        CommandPayload::RemoveCityEntity { city_id } => {
+            write_u8(bytes, 4);
+            write_u64(bytes, city_id.0);
+        }
+        CommandPayload::CreateRegionEntity { draft } => {
+            write_u8(bytes, 5);
+            let _ = write_region_draft(bytes, draft);
+        }
+        CommandPayload::RemoveRegionEntity { region_id } => {
+            write_u8(bytes, 6);
+            write_u64(bytes, region_id.0);
+        }
     }
 }
 
@@ -563,6 +699,23 @@ fn read_command_payload(cursor: &mut Cursor<'_>) -> Result<CommandPayload, SaveE
     match cursor.read_u8()? {
         0 => Ok(CommandPayload::NoOp {
             token: cursor.read_u64()?,
+        }),
+        1 => Ok(CommandPayload::CreateCountryEntity),
+        2 => Ok(CommandPayload::RemoveCountryEntity {
+            country_id: CountryId(cursor.read_u64()?),
+        }),
+        3 => Ok(CommandPayload::CreateCityEntity {
+            country_id: read_optional_country(cursor)?,
+            region_id: read_optional_region(cursor)?,
+        }),
+        4 => Ok(CommandPayload::RemoveCityEntity {
+            city_id: CityId(cursor.read_u64()?),
+        }),
+        5 => Ok(CommandPayload::CreateRegionEntity {
+            draft: read_region_draft(cursor)?,
+        }),
+        6 => Ok(CommandPayload::RemoveRegionEntity {
+            region_id: RegionId(cursor.read_u64()?),
         }),
         tag => Err(SaveError::InvalidTag {
             field: "command payload",
@@ -582,6 +735,7 @@ fn write_event_category(bytes: &mut Vec<u8>, category: EventCategory) {
         EventCategory::Occupation => 6,
         EventCategory::Treaty => 7,
         EventCategory::UserIntervention => 8,
+        EventCategory::EntityLifecycle => 9,
     };
     write_u8(bytes, tag);
 }
@@ -597,6 +751,7 @@ fn read_event_category(cursor: &mut Cursor<'_>) -> Result<EventCategory, SaveErr
         6 => Ok(EventCategory::Occupation),
         7 => Ok(EventCategory::Treaty),
         8 => Ok(EventCategory::UserIntervention),
+        9 => Ok(EventCategory::EntityLifecycle),
         tag => Err(SaveError::InvalidTag {
             field: "event category",
             tag,
@@ -610,7 +765,7 @@ fn write_event_source(bytes: &mut Vec<u8>, source: EventSource) {
         EventSource::User => write_u8(bytes, 1),
         EventSource::Country(country_id) => {
             write_u8(bytes, 2);
-            write_u16(bytes, country_id.0);
+            write_u64(bytes, country_id.0);
         }
     }
 }
@@ -619,7 +774,7 @@ fn read_event_source(cursor: &mut Cursor<'_>) -> Result<EventSource, SaveError> 
     match cursor.read_u8()? {
         0 => Ok(EventSource::System),
         1 => Ok(EventSource::User),
-        2 => Ok(EventSource::Country(CountryId(cursor.read_u16()?))),
+        2 => Ok(EventSource::Country(CountryId(cursor.read_u64()?))),
         tag => Err(SaveError::InvalidTag {
             field: "event source",
             tag,
@@ -633,13 +788,58 @@ fn write_event_payload(bytes: &mut Vec<u8>, payload: EventPayload) {
             write_u8(bytes, 0);
             write_u64(bytes, command_id.0);
         }
+        EventPayload::EntityCreated { entity } => {
+            write_u8(bytes, 1);
+            write_entity_ref(bytes, entity);
+        }
+        EventPayload::EntityRemoved { entity } => {
+            write_u8(bytes, 2);
+            write_entity_ref(bytes, entity);
+        }
     }
+}
+
+fn write_entity_ref(bytes: &mut Vec<u8>, entity: EntityRef) {
+    write_u8(
+        bytes,
+        match entity.kind {
+            EntityKind::Country => 0,
+            EntityKind::Region => 1,
+            EntityKind::City => 2,
+        },
+    );
+    write_u64(bytes, entity.id.0);
+}
+
+fn read_entity_ref(cursor: &mut Cursor<'_>) -> Result<EntityRef, SaveError> {
+    let kind = match cursor.read_u8()? {
+        0 => EntityKind::Country,
+        1 => EntityKind::Region,
+        2 => EntityKind::City,
+        tag => {
+            return Err(SaveError::InvalidTag {
+                field: "entity kind",
+                tag,
+            })
+        }
+    };
+    let id = StableEntityId(cursor.read_u64()?);
+    if !id.is_valid() {
+        return Err(SaveError::InvalidBinary("invalid entity reference id"));
+    }
+    Ok(EntityRef { kind, id })
 }
 
 fn read_event_payload(cursor: &mut Cursor<'_>) -> Result<EventPayload, SaveError> {
     match cursor.read_u8()? {
         0 => Ok(EventPayload::CommandExecuted {
             command_id: CommandId(cursor.read_u64()?),
+        }),
+        1 => Ok(EventPayload::EntityCreated {
+            entity: read_entity_ref(cursor)?,
+        }),
+        2 => Ok(EventPayload::EntityRemoved {
+            entity: read_entity_ref(cursor)?,
         }),
         tag => Err(SaveError::InvalidTag {
             field: "event payload",

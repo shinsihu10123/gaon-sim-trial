@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{
-    CountryId, EntityRegistry, EntityRegistryError, RegionId, StableEntityId,
-};
+use crate::{CountryId, EntityRegistry, EntityRegistryError, RegionId, StableEntityId};
 
 /// Region count used by the Standard Benchmark S fixture only.
 pub const TRIAL_REGION_COUNT: usize = 60;
@@ -174,11 +172,7 @@ impl RegionRegistry {
     /// # Errors
     /// Returns [`EntityRegistryError`] for unknown neighbors or exhausted IDs.
     pub fn create(&mut self, draft: RegionDraft) -> Result<RegionId, EntityRegistryError> {
-        if draft
-            .neighbors
-            .windows(2)
-            .any(|pair| pair[0] >= pair[1])
-        {
+        if draft.neighbors.windows(2).any(|pair| pair[0] >= pair[1]) {
             return Err(EntityRegistryError::InvalidReference);
         }
         if draft
@@ -349,7 +343,9 @@ impl WorldSpatialState {
     /// Returns [`WorldSpatialError`] for invalid geometry, ownership, references
     /// or registry allocation failure.
     pub fn create_region(&mut self, draft: RegionDraft) -> Result<RegionId, WorldSpatialError> {
-        let bounds = self.bounds.ok_or(WorldSpatialError::PartialInitialization)?;
+        let bounds = self
+            .bounds
+            .ok_or(WorldSpatialError::PartialInitialization)?;
         validate_region_draft(bounds, &draft)?;
         let id = self
             .regions
@@ -365,13 +361,13 @@ impl WorldSpatialState {
     /// Returns [`WorldSpatialError`] if the Region does not exist or the
     /// resulting topology is invalid.
     pub fn remove_region(&mut self, id: RegionId) -> Result<RegionState, WorldSpatialError> {
+        if self.regions.len() <= 1 {
+            return Err(WorldSpatialError::PartialInitialization);
+        }
         let removed = self
             .regions
             .remove(id)
             .map_err(|_| WorldSpatialError::UnknownRegion { region: id })?;
-        if self.regions.is_empty() {
-            return Err(WorldSpatialError::PartialInitialization);
-        }
         self.validate()?;
         Ok(removed)
     }
@@ -396,7 +392,9 @@ impl WorldSpatialState {
             }
         }
 
-        let bounds = self.bounds.ok_or(WorldSpatialError::PartialInitialization)?;
+        let bounds = self
+            .bounds
+            .ok_or(WorldSpatialError::PartialInitialization)?;
         if self.regions.is_empty() {
             return Err(WorldSpatialError::PartialInitialization);
         }
@@ -407,12 +405,13 @@ impl WorldSpatialState {
                 if neighbor == region.id {
                     return Err(WorldSpatialError::SelfNeighbor { region: region.id });
                 }
-                let counterpart = self.regions.get(neighbor).ok_or(
-                    WorldSpatialError::UnknownNeighbor {
-                        region: region.id,
-                        neighbor,
-                    },
-                )?;
+                let counterpart =
+                    self.regions
+                        .get(neighbor)
+                        .ok_or(WorldSpatialError::UnknownNeighbor {
+                            region: region.id,
+                            neighbor,
+                        })?;
                 if counterpart.neighbors.binary_search(&region.id).is_err() {
                     return Err(WorldSpatialError::AsymmetricAdjacency {
                         region: region.id,
@@ -425,9 +424,11 @@ impl WorldSpatialState {
     }
 }
 
-fn validate_region_draft(bounds: WorldBounds, draft: &RegionDraft) -> Result<(), WorldSpatialError> {
-    if !bounds.contains(draft.center)
-        || draft.boundary.iter().any(|point| !bounds.contains(*point))
+fn validate_region_draft(
+    bounds: WorldBounds,
+    draft: &RegionDraft,
+) -> Result<(), WorldSpatialError> {
+    if !bounds.contains(draft.center) || draft.boundary.iter().any(|point| !bounds.contains(*point))
     {
         return Err(WorldSpatialError::PointOutsideBounds {
             region: RegionId(0),
@@ -441,11 +442,15 @@ fn validate_region_draft(bounds: WorldBounds, draft: &RegionDraft) -> Result<(),
     validate_political(RegionId(0), draft.surface, draft.political)
 }
 
-fn validate_region_state(bounds: WorldBounds, region: &RegionState) -> Result<(), WorldSpatialError> {
+fn validate_region_state(
+    bounds: WorldBounds,
+    region: &RegionState,
+) -> Result<(), WorldSpatialError> {
     if region.id.0 == 0 {
         return Err(WorldSpatialError::InvalidRegionId { found: region.id });
     }
-    if !bounds.contains(region.center) || region.boundary.iter().any(|point| !bounds.contains(*point))
+    if !bounds.contains(region.center)
+        || region.boundary.iter().any(|point| !bounds.contains(*point))
     {
         return Err(WorldSpatialError::PointOutsideBounds { region: region.id });
     }
@@ -487,36 +492,102 @@ pub enum WorldSpatialError {
     InvalidBounds,
     PartialInitialization,
     InvalidRegionRegistry,
-    InvalidRegionId { found: RegionId },
-    BoundaryTooShort { region: RegionId },
-    PointOutsideBounds { region: RegionId },
-    SelfNeighbor { region: RegionId },
-    UnknownRegion { region: RegionId },
-    UnknownNeighbor { region: RegionId, neighbor: RegionId },
-    NonCanonicalNeighborOrder { region: RegionId },
-    AsymmetricAdjacency { region: RegionId, neighbor: RegionId },
-    OceanHasPoliticalOwner { region: RegionId },
-    ControllerWithoutOwner { region: RegionId },
-    InvalidCountryId { region: RegionId },
+    InvalidRegionId {
+        found: RegionId,
+    },
+    BoundaryTooShort {
+        region: RegionId,
+    },
+    PointOutsideBounds {
+        region: RegionId,
+    },
+    SelfNeighbor {
+        region: RegionId,
+    },
+    UnknownRegion {
+        region: RegionId,
+    },
+    UnknownNeighbor {
+        region: RegionId,
+        neighbor: RegionId,
+    },
+    NonCanonicalNeighborOrder {
+        region: RegionId,
+    },
+    AsymmetricAdjacency {
+        region: RegionId,
+        neighbor: RegionId,
+    },
+    OceanHasPoliticalOwner {
+        region: RegionId,
+    },
+    ControllerWithoutOwner {
+        region: RegionId,
+    },
+    InvalidCountryId {
+        region: RegionId,
+    },
 }
 
 impl core::fmt::Display for WorldSpatialError {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::InvalidBounds => formatter.write_str("world bounds must have positive extent"),
-            Self::PartialInitialization => formatter.write_str("world spatial state is partially initialized"),
-            Self::InvalidRegionRegistry => formatter.write_str("Region registry allocator/state is invalid"),
-            Self::InvalidRegionId { found } => write!(formatter, "region id {} is invalid", found.0),
-            Self::BoundaryTooShort { region } => write!(formatter, "region {} boundary needs at least 3 points", region.0),
-            Self::PointOutsideBounds { region } => write!(formatter, "region {} has a point outside world bounds", region.0),
-            Self::SelfNeighbor { region } => write!(formatter, "region {} references itself as a neighbor", region.0),
-            Self::UnknownRegion { region } => write!(formatter, "region {} does not exist", region.0),
-            Self::UnknownNeighbor { region, neighbor } => write!(formatter, "region {} references unknown neighbor {}", region.0, neighbor.0),
-            Self::NonCanonicalNeighborOrder { region } => write!(formatter, "region {} neighbor ids are not strictly ascending", region.0),
-            Self::AsymmetricAdjacency { region, neighbor } => write!(formatter, "region {} adjacency to {} is not reciprocal", region.0, neighbor.0),
-            Self::OceanHasPoliticalOwner { region } => write!(formatter, "ocean region {} cannot have legal ownership or control", region.0),
-            Self::ControllerWithoutOwner { region } => write!(formatter, "region {} cannot have a controller without a legal owner", region.0),
-            Self::InvalidCountryId { region } => write!(formatter, "region {} references country id 0", region.0),
+            Self::PartialInitialization => {
+                formatter.write_str("world spatial state is partially initialized")
+            }
+            Self::InvalidRegionRegistry => {
+                formatter.write_str("Region registry allocator/state is invalid")
+            }
+            Self::InvalidRegionId { found } => {
+                write!(formatter, "region id {} is invalid", found.0)
+            }
+            Self::BoundaryTooShort { region } => write!(
+                formatter,
+                "region {} boundary needs at least 3 points",
+                region.0
+            ),
+            Self::PointOutsideBounds { region } => write!(
+                formatter,
+                "region {} has a point outside world bounds",
+                region.0
+            ),
+            Self::SelfNeighbor { region } => write!(
+                formatter,
+                "region {} references itself as a neighbor",
+                region.0
+            ),
+            Self::UnknownRegion { region } => {
+                write!(formatter, "region {} does not exist", region.0)
+            }
+            Self::UnknownNeighbor { region, neighbor } => write!(
+                formatter,
+                "region {} references unknown neighbor {}",
+                region.0, neighbor.0
+            ),
+            Self::NonCanonicalNeighborOrder { region } => write!(
+                formatter,
+                "region {} neighbor ids are not strictly ascending",
+                region.0
+            ),
+            Self::AsymmetricAdjacency { region, neighbor } => write!(
+                formatter,
+                "region {} adjacency to {} is not reciprocal",
+                region.0, neighbor.0
+            ),
+            Self::OceanHasPoliticalOwner { region } => write!(
+                formatter,
+                "ocean region {} cannot have legal ownership or control",
+                region.0
+            ),
+            Self::ControllerWithoutOwner { region } => write!(
+                formatter,
+                "region {} cannot have a controller without a legal owner",
+                region.0
+            ),
+            Self::InvalidCountryId { region } => {
+                write!(formatter, "region {} references country id 0", region.0)
+            }
         }
     }
 }
@@ -565,7 +636,8 @@ mod tests {
 
     #[test]
     fn benchmark_count_is_not_registry_limit() {
-        let benchmark = WorldSpatialState::new(bounds(), line_regions(TRIAL_REGION_COUNT)).expect("60");
+        let benchmark =
+            WorldSpatialState::new(bounds(), line_regions(TRIAL_REGION_COUNT)).expect("60");
         let larger = WorldSpatialState::new(bounds(), line_regions(75)).expect("75");
         assert_eq!(benchmark.regions.len(), 60);
         assert_eq!(larger.regions.len(), 75);
@@ -577,7 +649,11 @@ mod tests {
         let removed = spatial.remove_region(RegionId(3)).expect("remove");
         assert_eq!(removed.id, RegionId(3));
         assert!(spatial.region(RegionId(3)).is_none());
-        assert!(spatial.region(RegionId(2)).expect("region 2").neighbors.is_empty());
+        assert!(spatial
+            .region(RegionId(2))
+            .expect("region 2")
+            .neighbors
+            .is_empty());
 
         let created = spatial
             .create_region(RegionDraft {
@@ -593,7 +669,10 @@ mod tests {
             })
             .expect("create");
         assert_eq!(created, RegionId(4));
-        assert_eq!(spatial.region(RegionId(2)).expect("region 2").neighbors, vec![RegionId(4)]);
+        assert_eq!(
+            spatial.region(RegionId(2)).expect("region 2").neighbors,
+            vec![RegionId(4)]
+        );
     }
 
     #[test]

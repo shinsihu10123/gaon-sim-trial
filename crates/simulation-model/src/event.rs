@@ -131,6 +131,8 @@ mod tests {
         let payload = EventPayload::EntityCreated {
             entity: EntityRef::country(CountryId(12)),
         };
-        assert!(matches!(payload, EventPayload::EntityCreated { entity } if entity == EntityRef::country(CountryId(12))));
+        assert!(
+            matches!(payload, EventPayload::EntityCreated { entity } if entity == EntityRef::country(CountryId(12)))
+        );
     }
 }

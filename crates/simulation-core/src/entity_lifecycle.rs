@@ -1,5 +1,6 @@
 use simulation_model::{
-    CommandPayload, EntityRef, EntityRegistry, EntityRegistryError, EventPayload, RegionPoliticalState,
+    CommandPayload, EntityRef, EntityRegistry, EntityRegistryError, EventPayload,
+    RegionPoliticalState,
 };
 
 use crate::SimulationEngine;

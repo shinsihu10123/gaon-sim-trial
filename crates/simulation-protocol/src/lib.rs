@@ -5,7 +5,7 @@ use simulation_model::{
     BiomeClass, MapPoint, RegionSurface, ReliefClass, TerrainState, WorldBounds, WorldState,
 };
 
-pub const RENDER_SNAPSHOT_VERSION: u32 = 3;
+pub const RENDER_SNAPSHOT_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -185,25 +185,35 @@ impl From<WorldBounds> for RenderWorldBounds {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderRegionSnapshot {
-    pub id: u16,
+    pub id: String,
     pub surface: RenderRegionSurface,
     pub center: RenderMapPoint,
     pub boundary: Vec<RenderMapPoint>,
-    pub neighbors: Vec<u16>,
-    pub legal_owner: Option<u16>,
-    pub controller: Option<u16>,
+    pub neighbors: Vec<String>,
+    pub legal_owner: Option<String>,
+    pub controller: Option<String>,
 }
 
 impl From<&simulation_model::RegionState> for RenderRegionSnapshot {
     fn from(region: &simulation_model::RegionState) -> Self {
         Self {
-            id: region.id.0,
+            id: region.id.0.to_string(),
             surface: region.surface.into(),
             center: region.center.into(),
             boundary: region.boundary.iter().copied().map(Into::into).collect(),
-            neighbors: region.neighbors.iter().map(|neighbor| neighbor.0).collect(),
-            legal_owner: region.political.legal_owner.map(|country| country.0),
-            controller: region.political.controller.map(|country| country.0),
+            neighbors: region
+                .neighbors
+                .iter()
+                .map(|neighbor| neighbor.0.to_string())
+                .collect(),
+            legal_owner: region
+                .political
+                .legal_owner
+                .map(|country| country.0.to_string()),
+            controller: region
+                .political
+                .controller
+                .map(|country| country.0.to_string()),
         }
     }
 }

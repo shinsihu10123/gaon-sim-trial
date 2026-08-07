@@ -126,6 +126,7 @@ pub struct CommandId(pub u64);
 /// Origin of an accepted simulation command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CommandSource {
+    System,
     User,
     CountryAi(CountryId),
 }
@@ -147,6 +148,7 @@ pub enum CommandTiming {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum CommandPriority {
+    System = 0,
     UserIntervention = 10,
     CountryAi = 20,
 }
@@ -155,6 +157,7 @@ impl CommandPriority {
     #[must_use]
     pub const fn for_source(source: CommandSource) -> Self {
         match source {
+            CommandSource::System => Self::System,
             CommandSource::User => Self::UserIntervention,
             CommandSource::CountryAi(_) => Self::CountryAi,
         }
@@ -169,7 +172,73 @@ impl CommandPriority {
 /// those domain systems exist.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CommandPayload {
-    NoOp { token: u64 },
+    NoOp {
+        token: u64,
+    },
+    CreateCountryEntity,
+    RemoveCountryEntity {
+        country_id: CountryId,
+    },
+    CreateCityEntity {
+        country_id: Option<CountryId>,
+        region_id: Option<RegionId>,
+    },
+    RemoveCityEntity {
+        city_id: CityId,
+    },
+    CreateRegionEntity {
+        draft: RegionDraft,
+    },
+    RemoveRegionEntity {
+        region_id: RegionId,
+    },
+}
+
+impl CommandPayload {
+    #[must_use]
+    pub fn references_country(&self, country_id: CountryId) -> bool {
+        match self {
+            Self::RemoveCountryEntity {
+                country_id: referenced,
+            } => *referenced == country_id,
+            Self::CreateCityEntity {
+                country_id: Some(referenced),
+                ..
+            } => *referenced == country_id,
+            Self::CreateRegionEntity { draft } => {
+                draft.political.legal_owner == Some(country_id)
+                    || draft.political.controller == Some(country_id)
+            }
+            Self::NoOp { .. }
+            | Self::CreateCountryEntity
+            | Self::CreateCityEntity {
+                country_id: None, ..
+            }
+            | Self::RemoveCityEntity { .. }
+            | Self::RemoveRegionEntity { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn references_region(&self, region_id: RegionId) -> bool {
+        match self {
+            Self::CreateCityEntity {
+                region_id: Some(referenced),
+                ..
+            } => *referenced == region_id,
+            Self::CreateRegionEntity { draft } => draft.neighbors.contains(&region_id),
+            Self::RemoveRegionEntity {
+                region_id: referenced,
+            } => *referenced == region_id,
+            Self::NoOp { .. }
+            | Self::CreateCountryEntity
+            | Self::RemoveCountryEntity { .. }
+            | Self::CreateCityEntity {
+                region_id: None, ..
+            }
+            | Self::RemoveCityEntity { .. } => false,
+        }
+    }
 }
 
 /// Command request before the core assigns identity, resolved date and
@@ -182,6 +251,15 @@ pub struct CommandRequest {
 }
 
 impl CommandRequest {
+    #[must_use]
+    pub const fn system(timing: CommandTiming, payload: CommandPayload) -> Self {
+        Self {
+            source: CommandSource::System,
+            timing,
+            payload,
+        }
+    }
+
     #[must_use]
     pub const fn user(timing: CommandTiming, payload: CommandPayload) -> Self {
         Self {
