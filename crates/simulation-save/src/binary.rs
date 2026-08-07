@@ -17,7 +17,11 @@ pub(crate) fn encode_snapshot(snapshot: &EngineSnapshot) -> Result<Vec<u8>, Save
     write_u64(&mut bytes, snapshot.next_command_id);
     write_u64(&mut bytes, snapshot.next_event_id);
 
-    write_count(&mut bytes, "pending_commands", snapshot.pending_commands.len())?;
+    write_count(
+        &mut bytes,
+        "pending_commands",
+        snapshot.pending_commands.len(),
+    )?;
     for command in &snapshot.pending_commands {
         write_queued_command(&mut bytes, command);
     }
