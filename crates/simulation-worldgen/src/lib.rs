@@ -2,7 +2,7 @@
 
 mod hydrology;
 
-use hydrology::{derive_hydrology, derive_landmasses, ensure_seeded_island};
+use hydrology::ensure_seeded_island;
 use simulation_model::{
     BiomeClass, ReliefClass, TerrainError, TerrainHydrology, TerrainLandmasses, TerrainSample,
     TerrainState, TERRAIN_GRID_SIDE, TERRAIN_SAMPLE_COUNT,
@@ -104,24 +104,14 @@ pub fn generate_trial_terrain(seed: u64) -> Result<TerrainState, TerrainError> {
 /// from the canonical terrain heightfield.
 #[must_use]
 pub fn derive_trial_hydrology(terrain: &TerrainState) -> TerrainHydrology {
-    let elevations = terrain
-        .samples
-        .iter()
-        .map(|sample| sample.elevation_m)
-        .collect::<Vec<_>>();
-    derive_hydrology(&elevations, usize::from(terrain.width))
+    terrain.derive_hydrology()
 }
 
 /// Derives deterministic connected landmasses and island identifiers from the
 /// canonical terrain heightfield.
 #[must_use]
 pub fn derive_trial_landmasses(terrain: &TerrainState) -> TerrainLandmasses {
-    let elevations = terrain
-        .samples
-        .iter()
-        .map(|sample| sample.elevation_m)
-        .collect::<Vec<_>>();
-    derive_landmasses(&elevations, usize::from(terrain.width))
+    terrain.derive_landmasses()
 }
 
 fn limit_neighbor_elevation_delta(elevations: &mut [i16], side: usize) {
