@@ -26,4 +26,11 @@ Implementation direction:
 - authoritative save format includes registry allocator state
 - JS RenderSnapshot boundary uses decimal-string IDs to avoid IEEE-754 precision loss
 
+Current integration gate:
+
+- model registries and Region Registry are present
+- lifecycle execution module is present
+- PR-level migration is wiring Command, Save v5, binary codec and RenderSnapshot contracts
+- permanent Core/Viewer CI will determine the next remediation steps
+
 No item is complete until permanent Core and Viewer validation and evidence are recorded.
