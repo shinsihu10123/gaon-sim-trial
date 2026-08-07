@@ -22,13 +22,14 @@ fn main() {
     let report = clock.advance_real_time(&mut engine, Duration::from_secs(1));
 
     println!(
-        "date={:04}-{:02}-{:02} elapsed_days={} ticks={} commands={} render_stride={} digest={:016x}",
+        "date={:04}-{:02}-{:02} elapsed_days={} ticks={} commands={} events={} render_stride={} digest={:016x}",
         engine.state().date.year,
         engine.state().date.month,
         engine.state().date.day,
         engine.state().elapsed_days,
         report.ticks_executed,
         report.commands_executed,
+        report.events_emitted,
         report.render_stride_days,
         engine.state_digest()
     );
