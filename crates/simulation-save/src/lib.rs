@@ -10,8 +10,8 @@ use simulation_model::{
     EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
 };
 
-/// Stage 2.1 adds canonical world topology to authoritative state.
-pub const SAVE_FORMAT_VERSION: u32 = 2;
+/// Stage 2.2 adds the canonical terrain heightfield to authoritative state.
+pub const SAVE_FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -296,6 +296,21 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
         ));
     }
 
+    if let Some(terrain) = &world.terrain {
+        if terrain.validate().is_err() {
+            return Err(SaveError::SnapshotInvariant(
+                "terrain state violates Stage 2.2 invariants",
+            ));
+        }
+        if let Some(spatial_bounds) = world.spatial.bounds {
+            if terrain.bounds != spatial_bounds {
+                return Err(SaveError::SnapshotInvariant(
+                    "terrain and region topology bounds disagree",
+                ));
+            }
+        }
+    }
+
     if world.spatial.validate().is_err() {
         return Err(SaveError::SnapshotInvariant(
             "world spatial state violates Stage 2.1 topology invariants",
@@ -486,7 +501,9 @@ fn parse_hex_u64(value: &str, message: &'static str) -> Result<u64, SaveError> {
 
 #[cfg(test)]
 mod tests {
-    use simulation_model::WorldState;
+    use simulation_model::{
+        BiomeClass, ReliefClass, TerrainSample, TerrainState, WorldState, TERRAIN_SAMPLE_COUNT,
+    };
 
     use super::{
         create_bundle, decode_bundle, AutosavePolicy, EngineSnapshot, SaveError, SaveKind,
@@ -504,6 +521,19 @@ mod tests {
         }
     }
 
+    fn ocean_terrain() -> TerrainState {
+        TerrainState::new_trial(vec![
+            TerrainSample {
+                elevation_m: -500,
+                moisture_permille: 500,
+                relief: ReliefClass::ShallowOcean,
+                biome: BiomeClass::Ocean,
+            };
+            TERRAIN_SAMPLE_COUNT
+        ])
+        .expect("valid terrain")
+    }
+
     #[test]
     fn metadata_and_binary_round_trip_exactly() {
         let snapshot = empty_snapshot(0xfedc_ba98_7654_3210);
@@ -515,6 +545,15 @@ mod tests {
         assert_eq!(metadata.seed_hex, "fedcba9876543210");
         let (kind, decoded) = decode_bundle(&bundle).expect("bundle should restore");
         assert_eq!(kind, SaveKind::Manual);
+        assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn terrain_round_trip_preserves_authoritative_samples() {
+        let mut snapshot = empty_snapshot(7);
+        snapshot.world.terrain = Some(ocean_terrain());
+        let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("terrain snapshot valid");
+        let (_, decoded) = decode_bundle(&bundle).expect("terrain bundle should restore");
         assert_eq!(decoded, snapshot);
     }
 
