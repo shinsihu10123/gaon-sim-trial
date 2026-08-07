@@ -2,6 +2,7 @@
 
 mod event;
 mod terrain;
+mod terrain_effects;
 mod world;
 
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
@@ -10,6 +11,7 @@ pub use terrain::{
     TerrainLandmasses, TerrainSample, TerrainState, NO_DOWNSTREAM_INDEX, TERRAIN_GRID_SIDE,
     TERRAIN_GRID_SPACING_M, TERRAIN_SAMPLE_COUNT, TERRAIN_SEA_LEVEL_M, TRIAL_WORLD_HALF_EXTENT_M,
 };
+pub use terrain_effects::{derive_terrain_effects, TerrainEffectField, TerrainEffects};
 pub use world::{
     MapPoint, RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialError,
     WorldSpatialState, TRIAL_REGION_COUNT,
