@@ -1,5 +1,5 @@
 import type { RenderSnapshot } from "./types";
-import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
+import type { WorkerRequest, WorkerRequestPayload, WorkerResponse } from "./worker-protocol";
 
 type PendingRequest = {
   resolve: (snapshot: RenderSnapshot) => void;
@@ -52,10 +52,10 @@ export class SimulationBridge {
     this.pending.clear();
   }
 
-  private request(payload: Omit<WorkerRequest, "id">): Promise<RenderSnapshot> {
+  private request(payload: WorkerRequestPayload): Promise<RenderSnapshot> {
     const id = this.nextRequestId;
     this.nextRequestId += 1;
-    const message = { id, ...payload } as WorkerRequest;
+    const message: WorkerRequest = { id, ...payload };
 
     return new Promise<RenderSnapshot>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
