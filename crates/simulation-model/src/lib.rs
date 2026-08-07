@@ -319,10 +319,8 @@ mod tests {
 
     #[test]
     fn command_constructors_preserve_origin_and_default_priority_lane() {
-        let user = CommandRequest::user(
-            CommandTiming::Immediate,
-            CommandPayload::NoOp { token: 1 },
-        );
+        let user =
+            CommandRequest::user(CommandTiming::Immediate, CommandPayload::NoOp { token: 1 });
         let ai = CommandRequest::country_ai(
             CountryId(3),
             CommandTiming::Immediate,
@@ -331,8 +329,6 @@ mod tests {
 
         assert_eq!(user.source, CommandSource::User);
         assert_eq!(ai.source, CommandSource::CountryAi(CountryId(3)));
-        assert!(
-            CommandPriority::for_source(user.source) < CommandPriority::for_source(ai.source)
-        );
+        assert!(CommandPriority::for_source(user.source) < CommandPriority::for_source(ai.source));
     }
 }
