@@ -653,11 +653,10 @@ mod tests {
         let removed = spatial.remove_region(RegionId(3)).expect("remove");
         assert_eq!(removed.id, RegionId(3));
         assert!(spatial.region(RegionId(3)).is_none());
-        assert!(spatial
-            .region(RegionId(2))
-            .expect("region 2")
-            .neighbors
-            .is_empty());
+        assert_eq!(
+            spatial.region(RegionId(2)).expect("region 2").neighbors,
+            vec![RegionId(1)]
+        );
 
         let created = spatial
             .create_region(RegionDraft {
@@ -675,7 +674,7 @@ mod tests {
         assert_eq!(created, RegionId(4));
         assert_eq!(
             spatial.region(RegionId(2)).expect("region 2").neighbors,
-            vec![RegionId(4)]
+            vec![RegionId(1), RegionId(4)]
         );
     }
 
