@@ -1,0 +1,53 @@
+name: Stage 2.1 Bootstrap CI
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Resolve Rust dependency graph
+        run: cargo generate-lockfile
+      - name: Rust format
+        run: cargo fmt --all -- --check
+      - name: Rust strict Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Headless regression
+        run: cargo run -p simulation-runner --quiet
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked --version 0.13.1
+      - name: Build browser WASM
+        run: wasm-pack build crates/simulation-wasm --target web --out-dir ../../viewer/src/generated/wasm --out-name simulation_wasm --release
+      - name: Resolve Viewer dependency graph
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --prefix viewer
+      - name: Install Viewer dependencies from resolved lock
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix viewer
+      - name: Viewer typecheck
+        run: npm run typecheck --prefix viewer
+      - name: Viewer production build
+        run: npm run build --prefix viewer
+      - name: Browser ownership contract
+        run: node scripts/check-viewer-contract.mjs
+      - name: Stage 2.1 world data contract
+        run: node scripts/check-world-data-contract.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage2-1-lockfiles
+          path: |
+            Cargo.lock
+            viewer/package-lock.json
