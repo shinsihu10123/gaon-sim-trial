@@ -3,6 +3,7 @@
 Status: **PASS**
 
 Validated feature head before evidence update: `f81bc09b7da1c154ab634d92b880567f6f029e92`
+Final evidence head: `acac3cb42ea85293f7984f9d55c5a0a67f5de7ee`
 PR: #11 `Stage 2.4 deterministic resource generation`
 
 ## Implemented scope
@@ -52,18 +53,31 @@ Command-journal replay regenerates both terrain and resources from the same seed
 
 ## Validation evidence
 
-### Permanent Core CI
+### Functional feature head
 
-Workflow run: `31192650029` — **PASS**
+Core workflow run: `31192650029` — **PASS**
+Viewer workflow run: `31192650994` — **PASS**
 
-Verified:
+### Final evidence head revalidation
+
+Core workflow run: `31197498674` — **PASS**
+Viewer workflow run: `31197496599` — **PASS**
+
+Verified on the final evidence head:
 
 - `cargo fmt --all -- --check` — PASS
 - `cargo clippy --locked --workspace --all-targets -- -D warnings` — PASS
 - `cargo test --locked --workspace` — PASS
 - headless save/load/replay — PASS
+- locked Rust workspace — PASS
+- actual Rust WASM adapter build — PASS
+- `npm ci` — PASS
+- TypeScript typecheck — PASS
+- Vite production build — PASS
+- Stage 1.1 ownership contract — PASS
+- chained Stage 2 source contracts, including Stage 2.4 — PASS
 
-Rust test total: **85 passed, 0 failed**
+Rust test total on the functional validation head: **85 passed, 0 failed**
 
 Relevant resource tests include:
 
@@ -89,20 +103,6 @@ Headless reference result after 365 ticks:
 - save state bytes: `1165133`
 - canonical digest: `d854265b9f358cdd`
 - deterministic random probe: `821968d634b31c8f`
-
-### Permanent Viewer CI
-
-Workflow run: `31192650994` — **PASS**
-
-Verified:
-
-- locked Rust workspace — PASS
-- actual Rust WASM adapter build — PASS
-- `npm ci` — PASS
-- TypeScript typecheck — PASS
-- Vite production build — PASS
-- Stage 1.1 ownership contract — PASS
-- chained Stage 2 source contracts, including Stage 2.4 — PASS
 
 ## WBS completion
 
