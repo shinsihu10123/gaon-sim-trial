@@ -1,8 +1,8 @@
 use simulation_model::{
-    CommandExecutionRecord, CommandId, CommandPayload, CommandPriority, CommandSource, CountryId,
-    EventCategory, EventId, EventPayload, EventRecord, EventSource, MapPoint, QueuedCommand,
-    RegionId, RegionPoliticalState, RegionState, RegionSurface, SimulationDate, WorldBounds,
-    WorldSpatialState, WorldState,
+    BiomeClass, CommandExecutionRecord, CommandId, CommandPayload, CommandPriority, CommandSource,
+    CountryId, EventCategory, EventId, EventPayload, EventRecord, EventSource, MapPoint,
+    QueuedCommand, RegionId, RegionPoliticalState, RegionState, RegionSurface, ReliefClass,
+    SimulationDate, TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -97,6 +97,14 @@ fn write_world(bytes: &mut Vec<u8>, world: &WorldState) -> Result<(), SaveError>
     write_u64(bytes, world.elapsed_days);
     write_u64(bytes, world.seed);
 
+    match &world.terrain {
+        None => write_u8(bytes, 0),
+        Some(terrain) => {
+            write_u8(bytes, 1);
+            write_terrain(bytes, terrain)?;
+        }
+    }
+
     match world.spatial.bounds {
         None => write_u8(bytes, 0),
         Some(bounds) => {
@@ -119,6 +127,18 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
     let date = read_date(cursor)?;
     let elapsed_days = cursor.read_u64()?;
     let seed = cursor.read_u64()?;
+
+    let terrain = match cursor.read_u8()? {
+        0 => None,
+        1 => Some(read_terrain(cursor)?),
+        tag => {
+            return Err(SaveError::InvalidTag {
+                field: "terrain state",
+                tag,
+            });
+        }
+    };
+
     let spatial = match cursor.read_u8()? {
         0 => WorldSpatialState::uninitialized(),
         1 => {
@@ -149,8 +169,119 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
         date,
         elapsed_days,
         seed,
+        terrain,
         spatial,
     })
+}
+
+fn write_terrain(bytes: &mut Vec<u8>, terrain: &TerrainState) -> Result<(), SaveError> {
+    write_i32(bytes, terrain.bounds.min_x_m);
+    write_i32(bytes, terrain.bounds.max_x_m);
+    write_i32(bytes, terrain.bounds.min_z_m);
+    write_i32(bytes, terrain.bounds.max_z_m);
+    write_u16(bytes, terrain.width);
+    write_u16(bytes, terrain.height);
+    write_i32(bytes, terrain.spacing_m);
+    write_i16(bytes, terrain.sea_level_m);
+    write_count(bytes, "terrain_samples", terrain.samples.len())?;
+    for sample in &terrain.samples {
+        write_i16(bytes, sample.elevation_m);
+        write_u16(bytes, sample.moisture_permille);
+        write_relief(bytes, sample.relief);
+        write_biome(bytes, sample.biome);
+    }
+    Ok(())
+}
+
+fn read_terrain(cursor: &mut Cursor<'_>) -> Result<TerrainState, SaveError> {
+    let bounds = WorldBounds::new(
+        cursor.read_i32()?,
+        cursor.read_i32()?,
+        cursor.read_i32()?,
+        cursor.read_i32()?,
+    )
+    .map_err(|_| SaveError::InvalidBinary("invalid terrain bounds"))?;
+    let width = cursor.read_u16()?;
+    let height = cursor.read_u16()?;
+    let spacing_m = cursor.read_i32()?;
+    let sea_level_m = cursor.read_i16()?;
+    let count = cursor.read_count("terrain_samples")?;
+    let mut samples = Vec::with_capacity(count);
+    for _ in 0..count {
+        samples.push(TerrainSample {
+            elevation_m: cursor.read_i16()?,
+            moisture_permille: cursor.read_u16()?,
+            relief: read_relief(cursor)?,
+            biome: read_biome(cursor)?,
+        });
+    }
+
+    let terrain = TerrainState {
+        bounds,
+        width,
+        height,
+        spacing_m,
+        sea_level_m,
+        samples,
+    };
+    terrain
+        .validate()
+        .map_err(|_| SaveError::InvalidBinary("invalid terrain state"))?;
+    Ok(terrain)
+}
+
+fn write_relief(bytes: &mut Vec<u8>, relief: ReliefClass) {
+    let tag = match relief {
+        ReliefClass::DeepOcean => 0,
+        ReliefClass::ShallowOcean => 1,
+        ReliefClass::Coast => 2,
+        ReliefClass::Plains => 3,
+        ReliefClass::Hills => 4,
+        ReliefClass::Mountains => 5,
+    };
+    write_u8(bytes, tag);
+}
+
+fn read_relief(cursor: &mut Cursor<'_>) -> Result<ReliefClass, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(ReliefClass::DeepOcean),
+        1 => Ok(ReliefClass::ShallowOcean),
+        2 => Ok(ReliefClass::Coast),
+        3 => Ok(ReliefClass::Plains),
+        4 => Ok(ReliefClass::Hills),
+        5 => Ok(ReliefClass::Mountains),
+        tag => Err(SaveError::InvalidTag {
+            field: "terrain relief",
+            tag,
+        }),
+    }
+}
+
+fn write_biome(bytes: &mut Vec<u8>, biome: BiomeClass) {
+    let tag = match biome {
+        BiomeClass::Ocean => 0,
+        BiomeClass::Grassland => 1,
+        BiomeClass::Forest => 2,
+        BiomeClass::Desert => 3,
+        BiomeClass::Wetland => 4,
+        BiomeClass::Alpine => 5,
+    };
+    write_u8(bytes, tag);
+}
+
+fn read_biome(cursor: &mut Cursor<'_>) -> Result<BiomeClass, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(BiomeClass::Ocean),
+        1 => Ok(BiomeClass::Grassland),
+        2 => Ok(BiomeClass::Forest),
+        3 => Ok(BiomeClass::Desert),
+        4 => Ok(BiomeClass::Wetland),
+        5 => Ok(BiomeClass::Alpine),
+        tag => Err(SaveError::InvalidTag {
+            field: "terrain biome",
+            tag,
+        }),
+    }
 }
 
 fn write_region(bytes: &mut Vec<u8>, region: &RegionState) -> Result<(), SaveError> {
@@ -483,6 +614,10 @@ fn write_u64(bytes: &mut Vec<u8>, value: u64) {
     bytes.extend_from_slice(&value.to_le_bytes());
 }
 
+fn write_i16(bytes: &mut Vec<u8>, value: i16) {
+    bytes.extend_from_slice(&value.to_le_bytes());
+}
+
 fn write_i32(bytes: &mut Vec<u8>, value: i32) {
     bytes.extend_from_slice(&value.to_le_bytes());
 }
@@ -525,6 +660,10 @@ impl<'a> Cursor<'a> {
         Ok(u64::from_le_bytes(self.read_array::<8>()?))
     }
 
+    fn read_i16(&mut self) -> Result<i16, SaveError> {
+        Ok(i16::from_le_bytes(self.read_array::<2>()?))
+    }
+
     fn read_i32(&mut self) -> Result<i32, SaveError> {
         Ok(i32::from_le_bytes(self.read_array::<4>()?))
     }
@@ -548,8 +687,9 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use simulation_model::{
-        MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldBounds,
-        WorldSpatialState, WorldState, TRIAL_REGION_COUNT,
+        BiomeClass, MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface,
+        ReliefClass, TerrainSample, TerrainState, WorldBounds, WorldSpatialState, WorldState,
+        TERRAIN_SAMPLE_COUNT, TRIAL_REGION_COUNT,
     };
 
     use super::{decode_snapshot, encode_snapshot};
@@ -588,6 +728,19 @@ mod tests {
         .expect("valid trial spatial state")
     }
 
+    fn trial_terrain() -> TerrainState {
+        TerrainState::new_trial(vec![
+            TerrainSample {
+                elevation_m: -500,
+                moisture_permille: 500,
+                relief: ReliefClass::ShallowOcean,
+                biome: BiomeClass::Ocean,
+            };
+            TERRAIN_SAMPLE_COUNT
+        ])
+        .expect("valid trial terrain")
+    }
+
     fn empty_snapshot(world: WorldState) -> EngineSnapshot {
         EngineSnapshot {
             world,
@@ -605,6 +758,26 @@ mod tests {
         let encoded = encode_snapshot(&snapshot).expect("snapshot should encode");
         let decoded = decode_snapshot(&encoded).expect("snapshot should decode");
         assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn initialized_terrain_round_trip_is_exact() {
+        let mut world = WorldState::new(77);
+        world.terrain = Some(trial_terrain());
+        let snapshot = empty_snapshot(world);
+        let encoded = encode_snapshot(&snapshot).expect("snapshot should encode");
+        let decoded = decode_snapshot(&encoded).expect("snapshot should decode");
+        assert_eq!(decoded, snapshot);
+        assert_eq!(
+            decoded
+                .world
+                .terrain
+                .as_ref()
+                .expect("terrain restored")
+                .samples
+                .len(),
+            TERRAIN_SAMPLE_COUNT
+        );
     }
 
     #[test]
