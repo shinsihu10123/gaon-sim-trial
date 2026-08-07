@@ -1,10 +1,10 @@
-# Stage 2.2 — Deterministic Terrain and Elevation
+# Stage 2.2 — Deterministic Terrain, Hydrology and Islands
 
 ## Purpose
 
 Stage 2.2 gives the TEST world an authoritative continuous terrain surface generated from the world seed and rendered as actual 3D geometry.
 
-The terrain is simulation state, not decorative renderer data. Elevation and terrain classification must therefore survive save/restore, alter the authoritative digest and regenerate deterministically during replay.
+Terrain elevation is authoritative simulation state, not decorative renderer data. Hydrology and landmass topology are deterministic derivatives of that authoritative heightfield so they cannot diverge from the saved geography.
 
 ## Canonical terrain geometry
 
@@ -39,18 +39,20 @@ world seed
    ↓
 simulation-worldgen
    ↓
-TerrainState
+canonical TerrainState heightfield
+   ├─ derive_hydrology()
+   └─ derive_landmasses()
    ↓
 WorldState
    ↓
 canonical save / digest
    ↓
-RenderSnapshot
+RenderSnapshot v3
    ↓
-Three.js terrain mesh
+Three.js terrain + sea + river network
 ```
 
-This separation allows later region generation, resources and settlement placement to reuse a deterministic world-generation layer without coupling generation to tick processing.
+Hydrology and landmass IDs are not duplicated in the save file because they are pure deterministic functions of the serialized elevation field. This removes the possibility of a saved river graph disagreeing with the heightfield that generated it.
 
 ## Height generation
 
@@ -77,11 +79,26 @@ This prevents individual seeds from producing almost-all-land or almost-all-ocea
 
 The outer three sample rings are forced below sea level. This guarantees that the world is surrounded by continuous ocean and later maritime routing does not depend on accidental map-edge land bridges.
 
-## Moisture
+### Natural transition / slope limit
+
+After height generation, adjacent 10 km samples are processed by a deterministic slope limiter. The Stage 2.2 validation bound is **3,000 m maximum elevation difference between orthogonally adjacent samples**.
+
+The limiter removes accidental near-vertical discontinuities without flattening the mountain system or introducing floating-point smoothing into authoritative state.
+
+## Moisture and biome substrate
 
 Moisture uses a separate deterministic noise field with broad and regional scales. Values are normalized to integer permille.
 
-This is a Stage 2.2 environmental substrate, not a completed climate simulation. Latitude, prevailing winds, rain shadows and seasonal climate remain future extensions if required.
+Stage 2.2 derives these compact biome classes:
+
+- `Ocean`
+- `Grassland`
+- `Forest`
+- `Desert`
+- `Wetland`
+- `Alpine`
+
+This provides the required forest/desert/wetland distribution for the TEST world. It is intentionally not a full climate circulation or Köppen model.
 
 ## Relief classification
 
@@ -94,24 +111,49 @@ Relief is derived from elevation and immediate coastal adjacency:
 - `Hills`: 450 m to below 1,500 m
 - `Mountains`: 1,500 m and above
 
-Relief and biome remain separate concepts so later economic/military effects can use terrain geometry independently from ecological cover.
+Relief and biome remain separate concepts so later economic/military effects can use geometry independently from ecological cover.
 
-## Biome classification
+## Island generation and landmass topology
 
-Stage 2.2 uses a compact deterministic classification:
+The TEST world must contain islands rather than depending on chance. `simulation-worldgen` therefore uses the world seed to search deterministically for a sufficiently isolated ocean patch and raises a compact island inside it.
 
-- `Ocean`
-- `Grassland`
-- `Forest`
-- `Desert`
-- `Wetland`
-- `Alpine`
+The island location is not fixed across seeds. The generator changes the canonical elevation field, so the island is automatically included in save v3, authoritative digest, replay and 3D terrain.
 
-Classification depends on elevation and moisture. It is intentionally not a full Köppen climate model.
+Connected-land analysis then assigns deterministic `landmass_id` values using 8-neighbor connectivity:
+
+- ocean samples: landmass ID `0`
+- land components: positive deterministic IDs
+- largest component: mainland
+- every other disconnected component: island landmass
+
+The landmass analysis is derived from elevation and is therefore regenerated rather than independently serialized.
+
+## Drainage basins and river generation
+
+`TerrainState::derive_hydrology()` builds a deterministic D8-style drainage graph from the heightfield.
+
+For every land sample:
+
+1. inspect the eight adjacent samples;
+2. select the strictly lower neighbor with the lowest elevation;
+3. break equal-elevation choices by stable sample index;
+4. if no lower neighbor exists, treat the sample as an inland sink;
+5. accumulate upstream contributing cells from high elevation to low elevation;
+6. assign a deterministic drainage-basin ID by ocean outlet or inland sink;
+7. derive river order from accumulated flow.
+
+River-order thresholds for the TEST substrate are:
+
+- order 0: not rendered as a river
+- order 1: flow accumulation ≥ 8
+- order 2: flow accumulation ≥ 32
+- order 3: flow accumulation ≥ 128
+
+This is a strategic-scale hydrology model appropriate for a 10 km grid. Detailed erosion, meanders, tributary channel geometry and seasonal discharge are outside Stage 2.2.
 
 ## Persistence and authoritative digest
 
-Terrain expands authoritative state, so save format advances to **v3**.
+Save format remains **v3**.
 
 The canonical binary stores:
 
@@ -124,7 +166,9 @@ The canonical binary stores:
 - relief code
 - biome code
 
-`authoritative_state_digest()` hashes the same canonical binary substrate. Changing even one valid terrain sample therefore changes the canonical state bytes and digest substrate.
+Hydrology, basin IDs, river order and landmass IDs are not duplicated in the save because they are reproducible derivatives of these canonical terrain samples.
+
+`authoritative_state_digest()` hashes the canonical binary substrate. Changing a valid terrain elevation changes both the saved state and every derived geography result that depends on it.
 
 ## Replay semantics
 
@@ -136,13 +180,14 @@ From Stage 2 onward, deterministic static world-generation state must also be re
 2. regenerates terrain from the original seed;
 3. inserts it into the replay snapshot;
 4. validates the snapshot through save v3;
-5. compares the complete authoritative state and digest.
+5. recomputes hydrology and landmass topology;
+6. compares complete authoritative state, derived geography and digest.
 
 This prevents generated geography from becoming an untracked external dependency.
 
-## RenderSnapshot v2
+## RenderSnapshot v3
 
-Renderer protocol version advances to v2 and includes:
+Renderer protocol version advances to **v3** and includes:
 
 - terrain dimensions
 - spacing and sea level
@@ -150,8 +195,14 @@ Renderer protocol version advances to v2 and includes:
 - moisture array
 - relief-code array
 - biome-code array
+- downstream sample indices
+- drainage-basin IDs
+- flow accumulation
+- river order
+- landmass IDs
+- island landmass ID list
 
-No independently generated terrain exists in TypeScript.
+The derived arrays are calculated from the authoritative heightfield immediately before snapshot construction. TypeScript never generates an independent terrain or river model.
 
 ## Three.js representation
 
@@ -163,23 +214,22 @@ The Viewer builds an indexed `BufferGeometry` directly from authoritative elevat
 - biome/relief vertex colors
 - separate sea-level plane
 - presentation-only vertical exaggeration
+- river `LineSegments` following authoritative downstream indices
 
-The terrain mesh and region-topology layer remain separate scene objects. Later borders, cities, roads, resources and armies can therefore be overlaid without replacing terrain state.
+The terrain, water, river and region-topology layers remain separate scene objects. Later borders, cities, roads, resources and armies can therefore be overlaid without replacing terrain state.
 
 ## Deferred scope
 
-Stage 2.2 does not yet implement:
+Stage 2.2 does not implement:
 
-- river network or hydrology
 - erosion simulation
-- detailed climate circulation
-- terrain economic modifiers
-- resource deposits
-- final 60-region generation on the terrain
+- detailed climate circulation and seasonal weather
+- fine channel geometry below the 10 km sample scale
+- terrain economic modifiers — Stage 2.3
+- resource deposits — Stage 2.4
+- final 60-region placement on generated geography — later Stage 2 work
 - country borders or cities
 - selectable region interaction
-
-These belong to later Stage 2 subsections.
 
 ## Acceptance criteria
 
@@ -188,16 +238,20 @@ Stage 2.2 is PASS only when all of the following hold:
 1. 129×129 canonical terrain validates;
 2. same seed generates identical terrain;
 3. different seeds produce different terrain;
-4. canonical seed has a balanced land/ocean distribution;
+4. representative seeds maintain balanced land/ocean distribution;
 5. all outer-edge samples are ocean;
-6. required relief classes are generated;
-7. required biome classes are generated;
-8. adjacent elevation discontinuity remains within the TEST validation bound;
+6. deep ocean, shallow ocean, coast, plains, hills and mountains are generated;
+7. forest, desert, wetland and other required biome classes are generated;
+8. adjacent elevation discontinuity remains within the 3,000 m TEST bound;
 9. invalid terrain classifications are rejected;
-10. save v3 round-trips all terrain samples exactly;
-11. a valid terrain sample change changes canonical state bytes/checksum;
-12. terrain is regenerated during deterministic command replay;
-13. RenderSnapshot v2 carries the authoritative terrain arrays;
-14. browser WASM initializes the authoritative engine with generated terrain;
-15. Three.js builds a heightfield mesh and separate sea level from the snapshot;
-16. locked Rust CI, headless regression, WASM build, TypeScript and Vite production build all pass.
+10. representative seeds contain at least one disconnected island landmass;
+11. hydrology produces deterministic downstream links, drainage basins and rivers;
+12. every river/downstream result is derived from canonical terrain rather than renderer state;
+13. save v3 round-trips all authoritative terrain samples exactly;
+14. save/load recomputation produces identical hydrology and landmass topology;
+15. a valid terrain sample change changes canonical state bytes/checksum;
+16. terrain and derived geography reproduce during command replay;
+17. RenderSnapshot v3 carries terrain, hydrology and landmass arrays;
+18. browser WASM initializes the authoritative engine with generated terrain;
+19. Three.js builds the heightfield, sea plane and authoritative river network;
+20. locked Rust CI, headless regression, WASM build, TypeScript and Vite production build all pass.
