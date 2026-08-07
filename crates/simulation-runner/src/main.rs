@@ -29,8 +29,28 @@ fn main() {
         SimulationEngine::from_save_bundle(&bundle).expect("headless save must restore exactly");
     assert_eq!(restored.export_snapshot(), engine.export_snapshot());
 
+    let journal = engine.accepted_command_journal();
+    let replayed = SimulationEngine::replay_from_journal(
+        engine.state().seed,
+        engine.state().elapsed_days,
+        &journal,
+    )
+    .expect("headless command journal must replay exactly");
+    assert_eq!(replayed.export_snapshot(), engine.export_snapshot());
+
+    let canonical_digest = restored
+        .authoritative_state_digest()
+        .expect("authoritative digest must be valid");
+    assert_eq!(
+        canonical_digest,
+        replayed
+            .authoritative_state_digest()
+            .expect("replayed digest must be valid")
+    );
+    let random_probe = restored.deterministic_random_u64(0x4741_4f4e, 0);
+
     println!(
-        "date={:04}-{:02}-{:02} elapsed_days={} ticks={} commands={} events={} render_stride={} save_json_bytes={} save_state_bytes={} digest={:016x}",
+        "date={:04}-{:02}-{:02} elapsed_days={} ticks={} commands={} events={} journal={} render_stride={} save_json_bytes={} save_state_bytes={} canonical_digest={:016x} random_probe={:016x}",
         restored.state().date.year,
         restored.state().date.month,
         restored.state().date.day,
@@ -38,9 +58,11 @@ fn main() {
         report.ticks_executed,
         report.commands_executed,
         report.events_emitted,
+        journal.len(),
         report.render_stride_days,
         bundle.metadata_json.len(),
         bundle.state_binary.len(),
-        restored.state_digest()
+        canonical_digest,
+        random_probe
     );
 }
