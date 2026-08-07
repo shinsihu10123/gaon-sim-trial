@@ -3,7 +3,7 @@
 Status: **PASS**
 
 Validated feature head before evidence update: `f81bc09b7da1c154ab634d92b880567f6f029e92`
-Final evidence head: `acac3cb42ea85293f7984f9d55c5a0a67f5de7ee`
+Final evidence head: `259cd4b4daa468688cf7a75949c30ab14a0bf04f`
 PR: #11 `Stage 2.4 deterministic resource generation`
 
 ## Implemented scope
@@ -58,12 +58,17 @@ Command-journal replay regenerates both terrain and resources from the same seed
 Core workflow run: `31192650029` — **PASS**
 Viewer workflow run: `31192650994` — **PASS**
 
-### Final evidence head revalidation
+### Evidence head validation
 
 Core workflow run: `31197498674` — **PASS**
 Viewer workflow run: `31197496599` — **PASS**
 
-Verified on the final evidence head:
+### Final documentation head validation
+
+Core workflow run: `31197819328` — **PASS**
+Viewer workflow run: `31197819317` — **PASS**
+
+Verified on the final documentation head:
 
 - `cargo fmt --all -- --check` — PASS
 - `cargo clippy --locked --workspace --all-targets -- -D warnings` — PASS
