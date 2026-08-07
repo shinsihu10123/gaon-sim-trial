@@ -9,6 +9,7 @@ rust-version.workspace = true
 simulation-core = { path = "../simulation-core" }
 simulation-model = { path = "../simulation-model" }
 simulation-save = { path = "../simulation-save" }
+simulation-worldgen = { path = "../simulation-worldgen" }
 
 [lints]
 workspace = true
