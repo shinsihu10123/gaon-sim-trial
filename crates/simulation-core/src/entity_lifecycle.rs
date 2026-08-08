@@ -14,79 +14,16 @@ impl SimulationEngine {
     ) -> Result<Option<EventPayload>, EntityRegistryError> {
         match payload {
             CommandPayload::NoOp { .. } => Ok(None),
-            CommandPayload::CreateHumanGroupEntity => {
-                let id = self.state.entities.human_groups.create()?;
-                Ok(Some(EventPayload::EntityCreated {
-                    entity: EntityRef::human_group(id),
-                }))
-            }
-            CommandPayload::RemoveHumanGroupEntity { human_group_id } => {
-                self.state.entities.human_groups.remove(*human_group_id)?;
-                Ok(Some(EventPayload::EntityRemoved {
-                    entity: EntityRef::human_group(*human_group_id),
-                }))
-            }
-            CommandPayload::CreateSettlementEntity => {
-                let id = self.state.entities.settlements.create()?;
-                Ok(Some(EventPayload::EntityCreated {
-                    entity: EntityRef::settlement(id),
-                }))
-            }
-            CommandPayload::RemoveSettlementEntity { settlement_id } => {
-                self.state.entities.settlements.remove(*settlement_id)?;
-                Ok(Some(EventPayload::EntityRemoved {
-                    entity: EntityRef::settlement(*settlement_id),
-                }))
-            }
-            CommandPayload::CreateCommunityEntity => {
-                let id = self.state.entities.communities.create()?;
-                Ok(Some(EventPayload::EntityCreated {
-                    entity: EntityRef::community(id),
-                }))
-            }
-            CommandPayload::RemoveCommunityEntity { community_id } => {
-                self.state.entities.communities.remove(*community_id)?;
-                Ok(Some(EventPayload::EntityRemoved {
-                    entity: EntityRef::community(*community_id),
-                }))
-            }
-            CommandPayload::CreatePoliticalEntity => {
-                let id = self.state.entities.political_entities.create()?;
-                Ok(Some(EventPayload::EntityCreated {
-                    entity: EntityRef::political_entity(id),
-                }))
-            }
-            CommandPayload::RemovePoliticalEntity {
-                political_entity_id,
-            } => {
-                self.state
-                    .entities
-                    .political_entities
-                    .remove(*political_entity_id)?;
-                Ok(Some(EventPayload::EntityRemoved {
-                    entity: EntityRef::political_entity(*political_entity_id),
-                }))
-            }
-            CommandPayload::PromotePoliticalEntityToCountry {
-                political_entity_id,
-            } => {
-                if !self
-                    .state
-                    .entities
-                    .political_entities
-                    .contains(*political_entity_id)
-                {
-                    return Err(EntityRegistryError::UnknownEntity);
-                }
-                let country_id = self.state.entities.countries.create()?;
-                self.state
-                    .entities
-                    .political_entities
-                    .remove(*political_entity_id)?;
-                Ok(Some(EventPayload::EntityTransitioned {
-                    from: EntityRef::political_entity(*political_entity_id),
-                    to: EntityRef::country(country_id),
-                }))
+            CommandPayload::CreateHumanGroupEntity
+            | CommandPayload::RemoveHumanGroupEntity { .. }
+            | CommandPayload::CreateSettlementEntity
+            | CommandPayload::RemoveSettlementEntity { .. }
+            | CommandPayload::CreateCommunityEntity
+            | CommandPayload::RemoveCommunityEntity { .. }
+            | CommandPayload::CreatePoliticalEntity
+            | CommandPayload::RemovePoliticalEntity { .. }
+            | CommandPayload::PromotePoliticalEntityToCountry { .. } => {
+                self.apply_pre_state_entity_payload(payload).map(Some)
             }
             CommandPayload::CreateCountryEntity => {
                 let id = self.state.entities.countries.create()?;
@@ -151,6 +88,89 @@ impl SimulationEngine {
                     entity: EntityRef::region(*region_id),
                 }))
             }
+        }
+    }
+
+    fn apply_pre_state_entity_payload(
+        &mut self,
+        payload: &CommandPayload,
+    ) -> Result<EventPayload, EntityRegistryError> {
+        match payload {
+            CommandPayload::CreateHumanGroupEntity => {
+                let id = self.state.entities.human_groups.create()?;
+                Ok(EventPayload::EntityCreated {
+                    entity: EntityRef::human_group(id),
+                })
+            }
+            CommandPayload::RemoveHumanGroupEntity { human_group_id } => {
+                self.state.entities.human_groups.remove(*human_group_id)?;
+                Ok(EventPayload::EntityRemoved {
+                    entity: EntityRef::human_group(*human_group_id),
+                })
+            }
+            CommandPayload::CreateSettlementEntity => {
+                let id = self.state.entities.settlements.create()?;
+                Ok(EventPayload::EntityCreated {
+                    entity: EntityRef::settlement(id),
+                })
+            }
+            CommandPayload::RemoveSettlementEntity { settlement_id } => {
+                self.state.entities.settlements.remove(*settlement_id)?;
+                Ok(EventPayload::EntityRemoved {
+                    entity: EntityRef::settlement(*settlement_id),
+                })
+            }
+            CommandPayload::CreateCommunityEntity => {
+                let id = self.state.entities.communities.create()?;
+                Ok(EventPayload::EntityCreated {
+                    entity: EntityRef::community(id),
+                })
+            }
+            CommandPayload::RemoveCommunityEntity { community_id } => {
+                self.state.entities.communities.remove(*community_id)?;
+                Ok(EventPayload::EntityRemoved {
+                    entity: EntityRef::community(*community_id),
+                })
+            }
+            CommandPayload::CreatePoliticalEntity => {
+                let id = self.state.entities.political_entities.create()?;
+                Ok(EventPayload::EntityCreated {
+                    entity: EntityRef::political_entity(id),
+                })
+            }
+            CommandPayload::RemovePoliticalEntity {
+                political_entity_id,
+            } => {
+                self.state
+                    .entities
+                    .political_entities
+                    .remove(*political_entity_id)?;
+                Ok(EventPayload::EntityRemoved {
+                    entity: EntityRef::political_entity(*political_entity_id),
+                })
+            }
+            CommandPayload::PromotePoliticalEntityToCountry {
+                political_entity_id,
+            } => {
+                if !self
+                    .state
+                    .entities
+                    .political_entities
+                    .contains(*political_entity_id)
+                {
+                    return Err(EntityRegistryError::UnknownEntity);
+                }
+                let country_id = self.state.entities.countries.create()?;
+                self.state
+                    .entities
+                    .political_entities
+                    .remove(*political_entity_id)?;
+                Ok(EventPayload::EntityTransitioned {
+                    from: EntityRef::political_entity(*political_entity_id),
+                    to: EntityRef::country(country_id),
+                })
+            }
+            _ => unreachable!("pre-state lifecycle dispatcher received non-pre-state payload"),
         }
     }
 
