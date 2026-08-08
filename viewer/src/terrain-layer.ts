@@ -32,6 +32,7 @@ export class TerrainLayer {
     const sampleCount = terrain.width * terrain.height;
     if (
       terrain.elevationM.length !== sampleCount ||
+      terrain.moisturePermille.length !== sampleCount ||
       terrain.biomeCodes.length !== sampleCount ||
       terrain.reliefCodes.length !== sampleCount ||
       terrain.downstreamIndices.length !== sampleCount ||
@@ -46,7 +47,6 @@ export class TerrainLayer {
     const transform = new WorldSpaceTransform(bounds);
     const positions = new Float32Array(sampleCount * 3);
     const colors = new Float32Array(sampleCount * 3);
-    const color = new THREE.Color();
 
     for (let z = 0; z < terrain.height; z += 1) {
       for (let x = 0; x < terrain.width; x += 1) {
@@ -64,7 +64,13 @@ export class TerrainLayer {
         positions[offset + 1] = point.y;
         positions[offset + 2] = point.z;
 
-        color.setHex(biomeColor(terrain.biomeCodes[index], terrain.reliefCodes[index]));
+        const color = terrainColor(
+          terrain.biomeCodes[index] ?? 0,
+          terrain.reliefCodes[index] ?? 0,
+          terrain.moisturePermille[index] ?? 0,
+          terrain.elevationM[index] ?? 0,
+          terrain.seaLevelM,
+        );
         colors[offset] = color.r;
         colors[offset + 1] = color.g;
         colors[offset + 2] = color.b;
@@ -90,8 +96,9 @@ export class TerrainLayer {
 
     const material = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.92,
+      roughness: 0.96,
       metalness: 0,
+      flatShading: false,
     });
     this.terrainMesh = new THREE.Mesh(geometry, material);
     this.terrainMesh.name = "authoritative-terrain-heightfield";
@@ -100,19 +107,25 @@ export class TerrainLayer {
     const seaGeometry = new THREE.PlaneGeometry(
       transform.extentXM * transform.horizontalScale,
       transform.extentZM * transform.horizontalScale,
+      1,
+      1,
     );
-    const seaMaterial = new THREE.MeshStandardMaterial({
-      color: 0x315b74,
+    const seaMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x315f78,
       transparent: true,
-      opacity: 0.72,
-      roughness: 0.35,
-      metalness: 0.05,
+      opacity: 0.68,
+      roughness: 0.22,
+      metalness: 0.02,
+      clearcoat: 0.38,
+      clearcoatRoughness: 0.3,
       side: THREE.DoubleSide,
+      depthWrite: false,
     });
     this.seaMesh = new THREE.Mesh(seaGeometry, seaMaterial);
     this.seaMesh.rotation.x = -Math.PI / 2;
-    this.seaMesh.position.y = transform.elevationToSceneY(terrain.seaLevelM) + 0.015;
+    this.seaMesh.position.y = transform.elevationToSceneY(terrain.seaLevelM) + 0.018;
     this.seaMesh.name = "authoritative-sea-level";
+    this.seaMesh.renderOrder = 2;
     this.scene.add(this.seaMesh);
 
     this.riverLines = buildRiverLines(terrain, positions);
@@ -169,18 +182,64 @@ function buildRiverLines(
     const sourceOffset = index * 3;
     const targetOffset = downstream * 3;
     segments.push(
-      positions[sourceOffset], positions[sourceOffset + 1] + 0.025, positions[sourceOffset + 2],
-      positions[targetOffset], positions[targetOffset + 1] + 0.025, positions[targetOffset + 2],
+      positions[sourceOffset], positions[sourceOffset + 1] + 0.028, positions[sourceOffset + 2],
+      positions[targetOffset], positions[targetOffset + 1] + 0.028, positions[targetOffset + 2],
     );
   }
   if (segments.length === 0) return undefined;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(segments, 3));
-  const material = new THREE.LineBasicMaterial({ color: 0x5f8fa8, transparent: true, opacity: 0.9 });
+  const material = new THREE.LineBasicMaterial({
+    color: 0x72a8bd,
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+  });
   const lines = new THREE.LineSegments(geometry, material);
   lines.name = "authoritative-river-network";
-  lines.renderOrder = 3;
+  lines.renderOrder = 4;
   return lines;
+}
+
+function terrainColor(
+  biomeCode: number,
+  reliefCode: number,
+  moisturePermille: number,
+  elevationM: number,
+  seaLevelM: number,
+): THREE.Color {
+  const base = new THREE.Color(biomeBaseColor(biomeCode));
+  const moisture = THREE.MathUtils.clamp(moisturePermille / 1000, 0, 1);
+  const elevationAboveSea = elevationM - seaLevelM;
+
+  if (elevationAboveSea <= 0) {
+    const depth = THREE.MathUtils.clamp(-elevationAboveSea / 1800, 0, 1);
+    return base.lerp(new THREE.Color(0x183f57), 0.2 + depth * 0.42);
+  }
+
+  const reliefLightness = reliefCode >= 3 ? 0.1 : reliefCode === 2 ? 0.045 : 0;
+  const altitude = THREE.MathUtils.clamp(elevationAboveSea / 3600, 0, 1);
+  const dryTint = new THREE.Color(0xb29c70);
+  const wetTint = new THREE.Color(0x426a4b);
+  base.lerp(moisture < 0.5 ? dryTint : wetTint, Math.abs(moisture - 0.5) * 0.24);
+  base.offsetHSL(0, 0, reliefLightness - altitude * 0.045);
+
+  if (altitude > 0.72) {
+    base.lerp(new THREE.Color(0xd5d7d4), (altitude - 0.72) / 0.28 * 0.72);
+  }
+  return base;
+}
+
+function biomeBaseColor(biomeCode: number): number {
+  switch (biomeCode) {
+    case 0: return 0x2b6079;
+    case 1: return 0x77875b;
+    case 2: return 0x41634a;
+    case 3: return 0x9d8b60;
+    case 4: return 0x5d7563;
+    case 5: return 0xb8bab7;
+    default: return 0x777777;
+  }
 }
 
 function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
@@ -188,17 +247,5 @@ function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
     for (const item of material) item.dispose();
   } else {
     material.dispose();
-  }
-}
-
-function biomeColor(biomeCode: number, reliefCode: number): number {
-  switch (biomeCode) {
-    case 0: return reliefCode === 0 ? 0x17364a : 0x27556f;
-    case 1: return 0x70835a;
-    case 2: return 0x3f6146;
-    case 3: return 0xa69468;
-    case 4: return 0x586f5e;
-    case 5: return 0xaeb0ad;
-    default: return 0x777777;
   }
 }

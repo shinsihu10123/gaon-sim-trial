@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EntitySelectionLayer } from "./entity-selection";
 import { SpatialEventFocusController, type SpatialFocusEvent } from "./event-focus";
+import { HumanGroupLayer } from "./human-group-layer";
 import { EntitySelectionPanel } from "./selection-panel";
 import { SimulationBridge } from "./simulation-bridge";
 import { TerrainLayer } from "./terrain-layer";
@@ -21,18 +22,22 @@ root.append(viewport, panel);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xb9c7cd);
+scene.fog = new THREE.FogExp2(0xb9c7cd, 0.0065);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
 camera.position.set(52, 42, 52);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
 viewport.append(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 const cameraController = new WorldCameraController(camera, controls);
 const eventFocusController = new SpatialEventFocusController(cameraController);
 
-scene.add(new THREE.HemisphereLight(0xeef7ff, 0x44513f, 1.5));
-const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+scene.add(new THREE.HemisphereLight(0xeef7ff, 0x44513f, 1.4));
+const sun = new THREE.DirectionalLight(0xfff7e8, 2.15);
 sun.position.set(35, 60, 20);
 scene.add(sun);
 
@@ -47,6 +52,7 @@ scene.add(stagingGrid);
 
 const terrainLayer = new TerrainLayer(scene);
 const topologyLayer = new WorldTopologyLayer(scene);
+const humanGroupLayer = new HumanGroupLayer(scene);
 const selectionLayer = new EntitySelectionLayer(scene);
 const selectionPanel = new EntitySelectionPanel(root);
 const bridge = new SimulationBridge();
@@ -102,6 +108,7 @@ function applySnapshot(snapshot: RenderSnapshot): void {
   stagingGrid.visible = !hasTerrain;
   terrainLayer.update(snapshot.world.bounds, snapshot.world.terrain);
   topologyLayer.update(snapshot.world);
+  humanGroupLayer.update(snapshot.world);
   selectionLayer.update(snapshot.world);
   selectionPanel.setTargets(selectionLayer.listTargets());
   const selected = selectionLayer.selectedTarget();
@@ -129,6 +136,7 @@ export function autoFocusSpatialEvent(event: SpatialFocusEvent): boolean {
 window.addEventListener("beforeunload", () => {
   terrainLayer.dispose();
   topologyLayer.dispose();
+  humanGroupLayer.dispose();
   selectionLayer.dispose();
   selectionPanel.dispose();
   cameraController.dispose();
