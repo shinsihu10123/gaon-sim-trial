@@ -352,7 +352,7 @@ impl HumanGroupRegistry {
         }
     }
 
-    /// Restores a HumanGroup registry from canonical persisted parts.
+    /// Restores a `HumanGroup` registry from canonical persisted parts.
     ///
     /// # Errors
     /// Returns [`EntityRegistryError`] for invalid identity, allocator or seed-state data.
@@ -378,7 +378,7 @@ impl HumanGroupRegistry {
         Ok(Self { entries, next_id })
     }
 
-    /// Creates an uninitialized HumanGroup identity for generic lifecycle tests
+    /// Creates an uninitialized `HumanGroup` identity for generic lifecycle tests
     /// and later runtime systems.
     ///
     /// # Errors
@@ -387,7 +387,7 @@ impl HumanGroupRegistry {
         self.create_record(None)
     }
 
-    /// Creates a Year-1 HumanGroup with its authoritative initial ecological state.
+    /// Creates a Year-1 `HumanGroup` with its authoritative initial ecological state.
     ///
     /// # Errors
     /// Returns [`EntityRegistryError`] if the seed state is invalid or ID space is exhausted.
@@ -411,7 +411,7 @@ impl HumanGroupRegistry {
         Ok(id)
     }
 
-    /// Removes an existing HumanGroup without recycling its stable ID.
+    /// Removes an existing `HumanGroup` without recycling its stable ID.
     ///
     /// # Errors
     /// Returns [`EntityRegistryError::UnknownEntity`] if absent.
