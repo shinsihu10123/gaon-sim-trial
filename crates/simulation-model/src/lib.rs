@@ -8,8 +8,11 @@ mod terrain_effects;
 mod world;
 
 pub use entity::{
-    CityEntity, CityId, CityRegistry, CountryEntity, CountryId, CountryRegistry, EntityKind,
-    EntityRef, EntityRegistry, EntityRegistryError, EntityWorldState, RegionId, StableEntityId,
+    CityEntity, CityId, CityRegistry, CommunityEntity, CommunityId, CommunityRegistry,
+    CountryEntity, CountryId, CountryRegistry, EntityKind, EntityRef, EntityRegistry,
+    EntityRegistryError, EntityWorldState, HumanGroupEntity, HumanGroupId, HumanGroupRegistry,
+    PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, RegionId, SettlementEntity,
+    SettlementId, SettlementRegistry, StableEntityId,
 };
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
 pub use resources::{
@@ -164,16 +167,27 @@ impl CommandPriority {
     }
 }
 
-/// Extensible payload carried by the Stage 1 command infrastructure.
-///
-/// Domain commands for policy, diplomacy and military control are deliberately
-/// not invented in Stage 1. `NoOp` is retained as an infrastructure health
-/// probe so scheduling, ordering, logging and replay can be validated before
-/// those domain systems exist.
+/// Extensible payload carried by the deterministic command infrastructure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CommandPayload {
     NoOp {
         token: u64,
+    },
+    CreateHumanGroupEntity,
+    RemoveHumanGroupEntity {
+        human_group_id: HumanGroupId,
+    },
+    CreateSettlementEntity,
+    RemoveSettlementEntity {
+        settlement_id: SettlementId,
+    },
+    CreateCommunityEntity,
+    RemoveCommunityEntity {
+        community_id: CommunityId,
+    },
+    CreatePoliticalEntity,
+    RemovePoliticalEntity {
+        political_entity_id: PoliticalEntityId,
     },
     CreateCountryEntity,
     RemoveCountryEntity {
@@ -215,6 +229,14 @@ impl CommandPayload {
                     || draft.political.controller == Some(country_id)
             }
             Self::NoOp { .. }
+            | Self::CreateHumanGroupEntity
+            | Self::RemoveHumanGroupEntity { .. }
+            | Self::CreateSettlementEntity
+            | Self::RemoveSettlementEntity { .. }
+            | Self::CreateCommunityEntity
+            | Self::RemoveCommunityEntity { .. }
+            | Self::CreatePoliticalEntity
+            | Self::RemovePoliticalEntity { .. }
             | Self::CreateCountryEntity
             | Self::CreateCityEntity {
                 country_id: None, ..
@@ -236,6 +258,14 @@ impl CommandPayload {
             } => *referenced == region_id,
             Self::CreateRegionEntity { draft } => draft.neighbors.contains(&region_id),
             Self::NoOp { .. }
+            | Self::CreateHumanGroupEntity
+            | Self::RemoveHumanGroupEntity { .. }
+            | Self::CreateSettlementEntity
+            | Self::RemoveSettlementEntity { .. }
+            | Self::CreateCommunityEntity
+            | Self::RemoveCommunityEntity { .. }
+            | Self::CreatePoliticalEntity
+            | Self::RemovePoliticalEntity { .. }
             | Self::CreateCountryEntity
             | Self::RemoveCountryEntity { .. }
             | Self::CreateCityEntity {
@@ -371,6 +401,10 @@ impl WorldState {
             resources: None,
             spatial: WorldSpatialState::uninitialized(),
             entities: EntityWorldState {
+                human_groups: HumanGroupRegistry::new(),
+                settlements: SettlementRegistry::new(),
+                communities: CommunityRegistry::new(),
+                political_entities: PoliticalEntityRegistry::new(),
                 countries: CountryRegistry::new(),
                 cities: CityRegistry::new(),
             },
@@ -386,7 +420,7 @@ mod tests {
     };
 
     #[test]
-    fn start_state_is_stable() {
+    fn start_state_is_stable_and_pre_state() {
         let world = WorldState::new(42);
         assert_eq!(world.date, SimulationDate::START);
         assert_eq!(world.elapsed_days, 0);
@@ -395,6 +429,10 @@ mod tests {
         assert!(world.resources.is_none());
         assert!(!world.spatial.is_initialized());
         assert!(world.spatial.regions.is_empty());
+        assert!(world.entities.human_groups.is_empty());
+        assert!(world.entities.settlements.is_empty());
+        assert!(world.entities.communities.is_empty());
+        assert!(world.entities.political_entities.is_empty());
         assert!(world.entities.countries.is_empty());
         assert!(world.entities.cities.is_empty());
     }
