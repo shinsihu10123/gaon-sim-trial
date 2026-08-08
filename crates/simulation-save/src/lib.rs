@@ -11,7 +11,7 @@ use simulation_model::{
     WorldState,
 };
 
-/// Stage 2.6 adds authoritative Year-1 HumanGroup ecological seed state.
+/// Stage 2.6 adds authoritative Year-1 `HumanGroup` ecological seed state.
 pub const SAVE_FORMAT_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
