@@ -1,7 +1,6 @@
 use simulation_model::{
-    derive_terrain_effects, EntityRegistry, InitialKnowledgeProfile, MapPoint, RegionId,
-    RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
-    TRIAL_REGION_COUNT,
+    derive_terrain_effects, InitialKnowledgeProfile, MapPoint, RegionId, RegionPoliticalState,
+    RegionState, RegionSurface, WorldSpatialState, WorldState, TRIAL_REGION_COUNT,
 };
 
 use crate::{
