@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use simulation_model::{
-    derive_terrain_effects, EntityRegistry, HumanGroupId, HumanGroupRegistry, RegionId, TerrainState,
-    WorldState,
+    derive_terrain_effects, EntityRegistry, HumanGroupId, HumanGroupRegistry, RegionId,
+    TerrainState, WorldState,
 };
 
 const RATE_DENOMINATOR_PER_DAY: u128 = 365_000;
@@ -86,7 +86,11 @@ pub(crate) fn advance_population_survival(world: &mut WorldState) -> PopulationS
         };
         report.groups_updated = report.groups_updated.saturating_add(1);
 
-        let region_population = before.by_region.get(&state.region_id).copied().unwrap_or(0);
+        let region_population = before
+            .by_region
+            .get(&state.region_id)
+            .copied()
+            .unwrap_or(0);
         let carrying_capacity = terrain_effects.as_ref().and_then(|effects| {
             carrying_capacity_for_region(
                 world,
@@ -159,9 +163,7 @@ pub(crate) fn advance_population_survival(world: &mut WorldState) -> PopulationS
         state.population = population_with_births.saturating_sub(deaths).max(1);
         report.births = report.births.saturating_add(births);
         report.deaths = report.deaths.saturating_add(deaths);
-        report.starvation_deaths = report
-            .starvation_deaths
-            .saturating_add(starvation_deaths);
+        report.starvation_deaths = report.starvation_deaths.saturating_add(starvation_deaths);
         report.capacity_pressure_deaths = report
             .capacity_pressure_deaths
             .saturating_add(capacity_deaths);
@@ -174,7 +176,7 @@ pub(crate) fn advance_population_survival(world: &mut WorldState) -> PopulationS
 }
 
 fn birth_rate_per_thousand(nutrition_permille: u16, capacity_factor_permille: u16) -> u32 {
-    u32::from(BASE_BIRTH_RATE_PER_THOUSAND_YEAR)
+    BASE_BIRTH_RATE_PER_THOUSAND_YEAR
         .saturating_mul(u32::from(nutrition_permille))
         .saturating_mul(u32::from(capacity_factor_permille))
         / 1_000_000
@@ -239,7 +241,11 @@ fn carrying_capacity_for_region(
     let region = world.spatial.region(region_id)?;
     let sample_index = sample_index_for_point(terrain, region.center.x_m, region.center.z_m)
         .or_else(|| usize::try_from(fallback_sample_index).ok())?;
-    let carrying_per_km2 = u128::from(effects.sample(sample_index)?.carrying_capacity_people_per_km2);
+    let carrying_per_km2 = u128::from(
+        effects
+            .sample(sample_index)?
+            .carrying_capacity_people_per_km2,
+    );
     let area_m2 = polygon_area_m2(&region.boundary)?;
     let capacity = carrying_per_km2.saturating_mul(area_m2) / 1_000_000;
     Some(u64::try_from(capacity).unwrap_or(u64::MAX))
@@ -295,10 +301,7 @@ fn deterministic_rate_count(
     let whole = numerator / RATE_DENOMINATOR_PER_DAY;
     let remainder = numerator % RATE_DENOMINATOR_PER_DAY;
     let draw = u128::from(mix64(
-        world_seed
-            ^ group_id.0.rotate_left(17)
-            ^ elapsed_days.rotate_left(31)
-            ^ salt,
+        world_seed ^ group_id.0.rotate_left(17) ^ elapsed_days.rotate_left(31) ^ salt,
     )) % RATE_DENOMINATOR_PER_DAY;
     let count = whole.saturating_add(u128::from(draw < remainder));
     u64::try_from(count).unwrap_or(u64::MAX)
@@ -315,9 +318,9 @@ fn mix64(mut value: u64) -> u64 {
 mod tests {
     use simulation_model::{
         BiomeClass, HumanGroupBehaviorProfile, HumanGroupInitialState, HumanGroupRuntimeSeed,
-        InitialKnowledgeProfile, MapPoint, RegionPoliticalState, RegionState, RegionSurface,
-        ReliefClass, TerrainSample, TerrainState, WorldBounds, WorldSpatialState,
-        TERRAIN_SAMPLE_COUNT,
+        InitialKnowledgeProfile, MapPoint, RegionId, RegionPoliticalState, RegionState,
+        RegionSurface, ReliefClass, TerrainSample, TerrainState, WorldBounds, WorldSpatialState,
+        WorldState, TERRAIN_SAMPLE_COUNT,
     };
 
     use super::{advance_population_survival, aggregate_human_group_population};
