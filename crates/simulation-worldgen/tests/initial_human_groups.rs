@@ -1,6 +1,6 @@
 use simulation_model::{
     derive_terrain_effects, EntityRegistry, InitialKnowledgeProfile, MapPoint, RegionId,
-    RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState,
+    RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
 };
 use simulation_worldgen::{
     generate_initial_human_groups, generate_trial_resources, generate_trial_terrain,
@@ -53,6 +53,31 @@ fn groups_use_distinct_habitable_regions_and_valid_initial_stocks() {
         assert!((150..=650).contains(&initial.behavior.exploration_permille));
         assert!((200..=700).contains(&initial.behavior.settlement_bias_permille));
     }
+}
+
+#[test]
+fn initialization_leaves_modern_state_systems_inactive() {
+    let (terrain, resources, effects, spatial) = fixture_world(2026, 8);
+    let config = config(5, 15_000);
+    let groups =
+        generate_initial_human_groups(2026, &config, &spatial, &terrain, &resources, &effects)
+            .expect("groups generate");
+
+    let mut world = WorldState::new(2026);
+    world.spatial = spatial;
+    world.terrain = Some(terrain);
+    world.resources = Some(resources);
+    world.entities.human_groups = groups;
+
+    assert!(!world.entities.human_groups.is_empty());
+    assert!(world.entities.countries.is_empty());
+    assert!(world.entities.cities.is_empty());
+    assert!(world.entities.settlements.is_empty());
+    assert!(world.entities.communities.is_empty());
+    assert!(world.entities.political_entities.is_empty());
+    assert!(world.spatial.regions.iter().all(|region| {
+        region.political.legal_owner.is_none() && region.political.controller.is_none()
+    }));
 }
 
 #[test]
