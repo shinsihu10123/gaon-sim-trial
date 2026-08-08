@@ -28,15 +28,69 @@ body {
   height: 100%;
 }
 
-.status-panel {
+.status-panel,
+.selection-panel {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  max-width: min(520px, calc(100vw - 32px));
   padding: 10px 12px;
   border: 1px solid #555;
   background: rgb(17 17 17 / 88%);
   color: #ddd;
   font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.status-panel {
+  top: 16px;
+  right: 16px;
+  max-width: min(520px, calc(100vw - 32px));
   pointer-events: none;
+}
+
+.selection-panel {
+  top: 16px;
+  left: 16px;
+  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+}
+
+.selection-panel__title {
+  margin-bottom: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.selection-panel__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+}
+
+.selection-panel__select,
+.selection-panel button {
+  min-width: 0;
+  border: 1px solid #666;
+  border-radius: 0;
+  background: #202020;
+  color: #eee;
+  font: inherit;
+}
+
+.selection-panel__select {
+  padding: 6px 7px;
+}
+
+.selection-panel button {
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.selection-panel button:disabled {
+  color: #777;
+  cursor: default;
+}
+
+.selection-panel__summary {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #444;
+  color: #bbb;
 }
