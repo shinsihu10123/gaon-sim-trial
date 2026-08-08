@@ -27,11 +27,9 @@ impl SimulationWasm {
     #[wasm_bindgen(constructor)]
     pub fn new(seed_hex: &str) -> Result<SimulationWasm, JsValue> {
         let seed = parse_seed_hex(seed_hex).map_err(|message| JsValue::from_str(&message))?;
-        let world = generate_trial_civilization_origin_world(
-            seed,
-            &trial_preview_human_group_config(),
-        )
-        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let world =
+            generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
 
         let engine = SimulationEngine::new(seed);
         let mut snapshot = engine.export_snapshot();
@@ -119,11 +117,9 @@ mod tests {
     fn shared_bootstrap_can_become_authoritative_engine_state() {
         let seed = 2026;
         let mut snapshot = SimulationEngine::new(seed).export_snapshot();
-        snapshot.world = generate_trial_civilization_origin_world(
-            seed,
-            &trial_preview_human_group_config(),
-        )
-        .expect("world generates");
+        snapshot.world =
+            generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
+                .expect("world generates");
         let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("snapshot saves");
         let restored = SimulationEngine::from_save_bundle(&bundle).expect("engine restores");
         assert!(restored.state().terrain.is_some());

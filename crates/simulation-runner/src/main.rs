@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 use simulation_core::{SimulationClock, SimulationEngine, SimulationSpeed};
-use simulation_model::{CommandPayload, CommandTiming, CountryId, EntityRegistry, SimulationDate, TerrainState};
+use simulation_model::{
+    CommandPayload, CommandTiming, CountryId, EntityRegistry, SimulationDate, TerrainState,
+};
 use simulation_save::{create_bundle, SaveKind};
 use simulation_worldgen::{
     generate_trial_civilization_origin_world, trial_preview_human_group_config,
@@ -103,11 +105,9 @@ fn main() {
 
 fn initialized_engine(seed: u64) -> SimulationEngine {
     let mut initial = SimulationEngine::new(seed).export_snapshot();
-    initial.world = generate_trial_civilization_origin_world(
-        seed,
-        &trial_preview_human_group_config(),
-    )
-    .expect("trial civilization-origin world must generate");
+    initial.world =
+        generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
+            .expect("trial civilization-origin world must generate");
     let bundle =
         create_bundle(&initial, SaveKind::Manual).expect("trial initial state must be saveable");
     SimulationEngine::from_save_bundle(&bundle)
@@ -115,8 +115,9 @@ fn initialized_engine(seed: u64) -> SimulationEngine {
 }
 
 fn apply_shared_bootstrap_to_replay(world: &mut simulation_model::WorldState, seed: u64) {
-    let bootstrap = generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
-        .expect("replay bootstrap world must generate");
+    let bootstrap =
+        generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
+            .expect("replay bootstrap world must generate");
     world.terrain = bootstrap.terrain;
     world.resources = bootstrap.resources;
     world.spatial = bootstrap.spatial;

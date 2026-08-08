@@ -6,8 +6,7 @@ mod hydrology;
 mod resources;
 
 pub use bootstrap::{
-    generate_trial_civilization_origin_world, trial_preview_human_group_config,
-    TrialBootstrapError,
+    generate_trial_civilization_origin_world, trial_preview_human_group_config, TrialBootstrapError,
 };
 pub use human_groups::{
     generate_initial_human_groups, initial_group_contacts, initial_human_group_report,

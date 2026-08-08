@@ -26,7 +26,9 @@ impl core::fmt::Display for TrialBootstrapError {
             Self::Terrain => formatter.write_str("trial terrain generation failed"),
             Self::Resources => formatter.write_str("trial resource generation failed"),
             Self::Spatial => formatter.write_str("trial Region bootstrap failed"),
-            Self::HumanGroups(error) => write!(formatter, "trial HumanGroup bootstrap failed: {error}"),
+            Self::HumanGroups(error) => {
+                write!(formatter, "trial HumanGroup bootstrap failed: {error}")
+            }
         }
     }
 }
@@ -88,7 +90,10 @@ pub fn generate_trial_civilization_origin_world(
 fn benchmark_regions_from_terrain(
     terrain: &simulation_model::TerrainState,
 ) -> Result<WorldSpatialState, TrialBootstrapError> {
-    debug_assert_eq!(BENCHMARK_REGION_COLUMNS * BENCHMARK_REGION_ROWS, TRIAL_REGION_COUNT);
+    debug_assert_eq!(
+        BENCHMARK_REGION_COLUMNS * BENCHMARK_REGION_ROWS,
+        TRIAL_REGION_COUNT
+    );
     let intervals_x = usize::from(terrain.width).saturating_sub(1);
     let intervals_z = usize::from(terrain.height).saturating_sub(1);
     let mut regions = Vec::with_capacity(TRIAL_REGION_COUNT);
@@ -106,8 +111,10 @@ fn benchmark_regions_from_terrain(
                 .samples
                 .get(center_index)
                 .ok_or(TrialBootstrapError::Spatial)?;
-            let id = RegionId(u64::try_from(row * BENCHMARK_REGION_COLUMNS + column + 1)
-                .map_err(|_| TrialBootstrapError::Spatial)?);
+            let id = RegionId(
+                u64::try_from(row * BENCHMARK_REGION_COLUMNS + column + 1)
+                    .map_err(|_| TrialBootstrapError::Spatial)?,
+            );
             let mut neighbors = Vec::with_capacity(4);
             if column > 0 {
                 neighbors.push(RegionId(id.0 - 1));
@@ -116,10 +123,14 @@ fn benchmark_regions_from_terrain(
                 neighbors.push(RegionId(id.0 + 1));
             }
             if row > 0 {
-                neighbors.push(RegionId(id.0 - u64::try_from(BENCHMARK_REGION_COLUMNS).unwrap_or(10)));
+                neighbors.push(RegionId(
+                    id.0 - u64::try_from(BENCHMARK_REGION_COLUMNS).unwrap_or(10),
+                ));
             }
             if row + 1 < BENCHMARK_REGION_ROWS {
-                neighbors.push(RegionId(id.0 + u64::try_from(BENCHMARK_REGION_COLUMNS).unwrap_or(10)));
+                neighbors.push(RegionId(
+                    id.0 + u64::try_from(BENCHMARK_REGION_COLUMNS).unwrap_or(10),
+                ));
             }
             neighbors.sort_unstable();
 
@@ -140,7 +151,12 @@ fn benchmark_regions_from_terrain(
                     RegionSurface::Ocean
                 },
                 center: point(center_x, center_z)?,
-                boundary: vec![point(x0, z0)?, point(x1, z0)?, point(x1, z1)?, point(x0, z1)?],
+                boundary: vec![
+                    point(x0, z0)?,
+                    point(x1, z0)?,
+                    point(x1, z1)?,
+                    point(x0, z1)?,
+                ],
                 neighbors,
                 political: RegionPoliticalState::unclaimed(),
             });
@@ -158,8 +174,9 @@ mod tests {
 
     #[test]
     fn shared_preview_bootstrap_contains_regions_and_pre_state_human_groups() {
-        let world = generate_trial_civilization_origin_world(2026, &trial_preview_human_group_config())
-            .expect("bootstrap world");
+        let world =
+            generate_trial_civilization_origin_world(2026, &trial_preview_human_group_config())
+                .expect("bootstrap world");
         assert_eq!(world.spatial.regions.len(), 60);
         assert_eq!(world.entities.human_groups.len(), 8);
         assert!(world.entities.countries.is_empty());
@@ -168,7 +185,8 @@ mod tests {
             .spatial
             .regions
             .iter()
-            .all(|region| region.political.legal_owner.is_none() && region.political.controller.is_none()));
+            .all(|region| region.political.legal_owner.is_none()
+                && region.political.controller.is_none()));
     }
 
     #[test]

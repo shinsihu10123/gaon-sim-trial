@@ -28,7 +28,13 @@ impl RenderSnapshot {
         event_count: usize,
         authoritative_digest: u64,
     ) -> Self {
-        Self::build(world, command_count, event_count, authoritative_digest, true)
+        Self::build(
+            world,
+            command_count,
+            event_count,
+            authoritative_digest,
+            true,
+        )
     }
 
     /// Builds a dynamic frame without retransmitting the immutable terrain payload.
@@ -40,7 +46,13 @@ impl RenderSnapshot {
         event_count: usize,
         authoritative_digest: u64,
     ) -> Self {
-        Self::build(world, command_count, event_count, authoritative_digest, false)
+        Self::build(
+            world,
+            command_count,
+            event_count,
+            authoritative_digest,
+            false,
+        )
     }
 
     fn build(
@@ -114,43 +126,56 @@ impl RenderWorldSnapshot {
                 .human_groups
                 .iter()
                 .filter_map(|group| {
-                    group.initial.as_ref().map(|initial| RenderHumanGroupSnapshot {
-                        id: group.id.0.to_string(),
-                        region_id: initial.region_id.0.to_string(),
-                        x_m: initial.x_m,
-                        z_m: initial.z_m,
-                        population: initial.population.to_string(),
-                        food_stock_person_days: initial.food_stock_person_days.to_string(),
-                        basic_resource_stock_units: initial.basic_resource_stock_units.to_string(),
-                        mobility_permille: initial.behavior.mobility_permille,
-                        exploration_permille: initial.behavior.exploration_permille,
-                        settlement_bias_permille: initial.behavior.settlement_bias_permille,
-                    })
+                    group
+                        .initial
+                        .as_ref()
+                        .map(|initial| RenderHumanGroupSnapshot {
+                            id: group.id.0.to_string(),
+                            region_id: initial.region_id.0.to_string(),
+                            x_m: initial.x_m,
+                            z_m: initial.z_m,
+                            population: initial.population.to_string(),
+                            food_stock_person_days: initial.food_stock_person_days.to_string(),
+                            basic_resource_stock_units: initial
+                                .basic_resource_stock_units
+                                .to_string(),
+                            mobility_permille: initial.behavior.mobility_permille,
+                            exploration_permille: initial.behavior.exploration_permille,
+                            settlement_bias_permille: initial.behavior.settlement_bias_permille,
+                        })
                 })
                 .collect(),
             settlements: world
                 .entities
                 .settlements
                 .iter()
-                .map(|record| RenderIdentitySnapshot { id: record.id.0.to_string() })
+                .map(|record| RenderIdentitySnapshot {
+                    id: record.id.0.to_string(),
+                })
                 .collect(),
             communities: world
                 .entities
                 .communities
                 .iter()
-                .map(|record| RenderIdentitySnapshot { id: record.id.0.to_string() })
+                .map(|record| RenderIdentitySnapshot {
+                    id: record.id.0.to_string(),
+                })
                 .collect(),
             political_entities: world
                 .entities
                 .political_entities
                 .iter()
-                .map(|record| RenderIdentitySnapshot { id: record.id.0.to_string() })
+                .map(|record| RenderIdentitySnapshot {
+                    id: record.id.0.to_string(),
+                })
                 .collect(),
             countries: world
                 .entities
                 .countries
                 .iter()
-                .map(|record| RenderIdentitySnapshot { id: record.id.0.to_string() })
+                .map(|record| RenderIdentitySnapshot {
+                    id: record.id.0.to_string(),
+                })
                 .collect(),
             cities: world
                 .entities
@@ -223,14 +248,26 @@ impl From<&TerrainState> for RenderTerrainSnapshot {
             height: terrain.height,
             spacing_m: terrain.spacing_m,
             sea_level_m: terrain.sea_level_m,
-            elevation_m: terrain.samples.iter().map(|sample| sample.elevation_m).collect(),
+            elevation_m: terrain
+                .samples
+                .iter()
+                .map(|sample| sample.elevation_m)
+                .collect(),
             moisture_permille: terrain
                 .samples
                 .iter()
                 .map(|sample| sample.moisture_permille)
                 .collect(),
-            relief_codes: terrain.samples.iter().map(|sample| relief_code(sample.relief)).collect(),
-            biome_codes: terrain.samples.iter().map(|sample| biome_code(sample.biome)).collect(),
+            relief_codes: terrain
+                .samples
+                .iter()
+                .map(|sample| relief_code(sample.relief))
+                .collect(),
+            biome_codes: terrain
+                .samples
+                .iter()
+                .map(|sample| biome_code(sample.biome))
+                .collect(),
             downstream_indices: hydrology.downstream_indices,
             drainage_basin_ids: hydrology.drainage_basin_ids,
             flow_accumulation: hydrology.flow_accumulation,
@@ -302,9 +339,19 @@ impl From<&simulation_model::RegionState> for RenderRegionSnapshot {
             surface: region.surface.into(),
             center: region.center.into(),
             boundary: region.boundary.iter().copied().map(Into::into).collect(),
-            neighbors: region.neighbors.iter().map(|neighbor| neighbor.0.to_string()).collect(),
-            legal_owner: region.political.legal_owner.map(|country| country.0.to_string()),
-            controller: region.political.controller.map(|country| country.0.to_string()),
+            neighbors: region
+                .neighbors
+                .iter()
+                .map(|neighbor| neighbor.0.to_string())
+                .collect(),
+            legal_owner: region
+                .political
+                .legal_owner
+                .map(|country| country.0.to_string()),
+            controller: region
+                .political
+                .controller
+                .map(|country| country.0.to_string()),
         }
     }
 }
@@ -334,7 +381,10 @@ pub struct RenderMapPoint {
 
 impl From<MapPoint> for RenderMapPoint {
     fn from(point: MapPoint) -> Self {
-        Self { x_m: point.x_m, z_m: point.z_m }
+        Self {
+            x_m: point.x_m,
+            z_m: point.z_m,
+        }
     }
 }
 
@@ -354,13 +404,21 @@ mod tests {
                 let id = RegionId(u64::try_from(index).expect("id fits u64"));
                 let x = i32::try_from(index).expect("index fits i32") * 100;
                 let mut neighbors = Vec::new();
-                if index > 1 { neighbors.push(RegionId(u64::try_from(index - 1).expect("id fits u64"))); }
-                if index < TRIAL_REGION_COUNT { neighbors.push(RegionId(u64::try_from(index + 1).expect("id fits u64"))); }
+                if index > 1 {
+                    neighbors.push(RegionId(u64::try_from(index - 1).expect("id fits u64")));
+                }
+                if index < TRIAL_REGION_COUNT {
+                    neighbors.push(RegionId(u64::try_from(index + 1).expect("id fits u64")));
+                }
                 RegionState {
                     id,
                     surface: RegionSurface::Land,
                     center: MapPoint::new(x, 100),
-                    boundary: vec![MapPoint::new(x - 20, 80), MapPoint::new(x + 20, 80), MapPoint::new(x, 120)],
+                    boundary: vec![
+                        MapPoint::new(x - 20, 80),
+                        MapPoint::new(x + 20, 80),
+                        MapPoint::new(x, 120),
+                    ],
                     neighbors,
                     political: RegionPoliticalState::unclaimed(),
                 }
@@ -374,12 +432,15 @@ mod tests {
     }
 
     fn sample_terrain() -> TerrainState {
-        TerrainState::new_trial(vec![TerrainSample {
-            elevation_m: -500,
-            moisture_permille: 500,
-            relief: ReliefClass::ShallowOcean,
-            biome: BiomeClass::Ocean,
-        }; TERRAIN_SAMPLE_COUNT])
+        TerrainState::new_trial(vec![
+            TerrainSample {
+                elevation_m: -500,
+                moisture_permille: 500,
+                relief: ReliefClass::ShallowOcean,
+                biome: BiomeClass::Ocean,
+            };
+            TERRAIN_SAMPLE_COUNT
+        ])
         .expect("terrain valid")
     }
 
@@ -407,7 +468,10 @@ mod tests {
         assert_eq!(terrain.downstream_indices.len(), TERRAIN_SAMPLE_COUNT);
         assert_eq!(terrain.river_orders.len(), TERRAIN_SAMPLE_COUNT);
         assert_eq!(terrain.landmass_ids.len(), TERRAIN_SAMPLE_COUNT);
-        assert!(terrain.downstream_indices.iter().all(|&index| index == NO_DOWNSTREAM_INDEX));
+        assert!(terrain
+            .downstream_indices
+            .iter()
+            .all(|&index| index == NO_DOWNSTREAM_INDEX));
         assert!(terrain.island_landmass_ids.is_empty());
         assert!(snapshot.world.regions.is_empty());
     }

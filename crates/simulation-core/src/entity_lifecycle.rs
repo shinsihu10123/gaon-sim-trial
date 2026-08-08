@@ -193,22 +193,17 @@ impl SimulationEngine {
     }
 
     fn region_is_referenced(&self, region_id: simulation_model::RegionId) -> bool {
-        self.state
+        self.state.entities.human_groups.iter().any(|group| {
+            group
+                .initial
+                .as_ref()
+                .is_some_and(|initial| initial.region_id == region_id)
+        }) || self
+            .state
             .entities
-            .human_groups
+            .cities
             .iter()
-            .any(|group| {
-                group
-                    .initial
-                    .as_ref()
-                    .is_some_and(|initial| initial.region_id == region_id)
-            })
-            || self
-                .state
-                .entities
-                .cities
-                .iter()
-                .any(|city| city.region == Some(region_id))
+            .any(|city| city.region == Some(region_id))
             || self
                 .pending_commands
                 .iter()
