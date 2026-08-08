@@ -115,11 +115,23 @@ for (const fragment of [
 for (const fragment of [
   "group_count_is_parameterized_and_total_population_is_exact",
   "groups_use_distinct_habitable_regions_and_valid_initial_stocks",
+  "initialization_leaves_modern_state_systems_inactive",
   "same_seed_reproduces_groups_while_other_seed_changes_initialization",
   "contact_matrix_covers_every_pair_and_uses_distance_threshold",
 ]) {
   if (!generationTests.includes(fragment)) {
     throw new Error(`Stage 2.6 generation acceptance missing: ${fragment}`);
+  }
+}
+for (const fragment of [
+  "world.entities.countries.is_empty()",
+  "world.entities.cities.is_empty()",
+  "world.entities.political_entities.is_empty()",
+  "region.political.legal_owner.is_none()",
+  "region.political.controller.is_none()",
+]) {
+  if (!generationTests.includes(fragment)) {
+    throw new Error(`Stage 2.6 pre-state inactivity acceptance missing: ${fragment}`);
   }
 }
 for (const fragment of [
