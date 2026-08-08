@@ -62,15 +62,19 @@ export class WorldTopologyLayer {
     transform: WorldSpaceTransform,
   ): THREE.LineLoop {
     const points = region.boundary.map((point) =>
-      transform.worldPointToScene(point.xM, point.zM, 0.08),
+      transform.worldPointToScene(point.xM, point.zM, 0.095),
     );
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
-      color: region.surface === "ocean" ? 0x777777 : 0xd8d8d8,
+      color: region.surface === "ocean" ? 0x62727a : 0xc9d0cc,
+      transparent: true,
+      opacity: region.surface === "ocean" ? 0.16 : 0.28,
+      depthWrite: false,
     });
     const line = new THREE.LineLoop(geometry, material);
     line.name = `region-${region.id}`;
     line.userData.regionId = region.id;
+    line.renderOrder = 5;
     return line;
   }
 
