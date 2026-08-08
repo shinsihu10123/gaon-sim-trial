@@ -236,6 +236,20 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
         }
     };
 
+    let entities = read_entity_world(cursor)?;
+
+    Ok(WorldState {
+        date,
+        elapsed_days,
+        seed,
+        terrain,
+        resources,
+        spatial,
+        entities,
+    })
+}
+
+fn read_entity_world(cursor: &mut Cursor<'_>) -> Result<EntityWorldState, SaveError> {
     let human_group_next_id = cursor.read_u64()?;
     let human_group_count = cursor.read_count("human_groups")?;
     let mut human_groups = Vec::with_capacity(human_group_count);
@@ -305,21 +319,13 @@ fn read_world(cursor: &mut Cursor<'_>) -> Result<WorldState, SaveError> {
     let cities = CityRegistry::from_parts(city_next_id, cities)
         .map_err(|_| SaveError::InvalidBinary("invalid City registry"))?;
 
-    Ok(WorldState {
-        date,
-        elapsed_days,
-        seed,
-        terrain,
-        resources,
-        spatial,
-        entities: EntityWorldState {
-            human_groups,
-            settlements,
-            communities,
-            political_entities,
-            countries,
-            cities,
-        },
+    Ok(EntityWorldState {
+        human_groups,
+        settlements,
+        communities,
+        political_entities,
+        countries,
+        cities,
     })
 }
 
