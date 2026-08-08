@@ -8,7 +8,7 @@ const protocol = readFileSync("crates/simulation-protocol/src/lib.rs", "utf8");
 
 for (const fragment of [
   "pub const TRIAL_REGION_COUNT: usize = 60",
-  "benchmark preset only",
+  "Standard Benchmark S fixture only",
   "pub struct MapPoint",
   "pub struct WorldBounds",
   "pub enum RegionSurface",
