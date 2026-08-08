@@ -1,0 +1,51 @@
+name: Clippy Doc Fix
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/stage-2-8-0-render-hardening
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Restore public Result API error docs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/simulation-model/src/world.rs')
+          s = p.read_text()
+          replacements = {
+            '    pub fn from_records(records: Vec<RegionState>) -> Result<Self, EntityRegistryError> {': '    /// # Errors\n    /// Returns [`EntityRegistryError`] when Region IDs or allocator state are invalid.\n    pub fn from_records(records: Vec<RegionState>) -> Result<Self, EntityRegistryError> {',
+            '    pub fn from_parts(\n        next_id: u64,\n        records: Vec<RegionState>,\n    ) -> Result<Self, EntityRegistryError> {': '    /// # Errors\n    /// Returns [`EntityRegistryError`] for invalid IDs, duplicates, or allocator reuse.\n    pub fn from_parts(\n        next_id: u64,\n        records: Vec<RegionState>,\n    ) -> Result<Self, EntityRegistryError> {',
+            '    pub fn create(&mut self, draft: RegionDraft) -> Result<RegionId, EntityRegistryError> {': '    /// # Errors\n    /// Returns [`EntityRegistryError`] for invalid neighbor references or exhausted IDs.\n    pub fn create(&mut self, draft: RegionDraft) -> Result<RegionId, EntityRegistryError> {',
+            '    pub fn remove(&mut self, id: RegionId) -> Result<RegionState, EntityRegistryError> {': '    /// # Errors\n    /// Returns [`EntityRegistryError::UnknownEntity`] when the Region does not exist.\n    pub fn remove(&mut self, id: RegionId) -> Result<RegionState, EntityRegistryError> {',
+            '    pub fn new(bounds: WorldBounds, regions: Vec<RegionState>) -> Result<Self, WorldSpatialError> {': '    /// # Errors\n    /// Returns [`WorldSpatialError`] when bounds, topology, or Region geometry is invalid.\n    pub fn new(bounds: WorldBounds, regions: Vec<RegionState>) -> Result<Self, WorldSpatialError> {',
+            '    pub fn new_trial(\n        bounds: WorldBounds,\n        regions: Vec<RegionState>,\n    ) -> Result<Self, WorldSpatialError> {': '    /// # Errors\n    /// Returns [`WorldSpatialError`] under the same validation rules as [`Self::new`].\n    pub fn new_trial(\n        bounds: WorldBounds,\n        regions: Vec<RegionState>,\n    ) -> Result<Self, WorldSpatialError> {',
+            '    pub fn from_registry(\n        bounds: WorldBounds,\n        regions: RegionRegistry,\n    ) -> Result<Self, WorldSpatialError> {': '    /// # Errors\n    /// Returns [`WorldSpatialError`] when restored topology or Region geometry is invalid.\n    pub fn from_registry(\n        bounds: WorldBounds,\n        regions: RegionRegistry,\n    ) -> Result<Self, WorldSpatialError> {',
+            '    pub fn create_region(&mut self, draft: RegionDraft) -> Result<RegionId, WorldSpatialError> {': '    /// # Errors\n    /// Returns [`WorldSpatialError`] for invalid geometry, ownership, references, or allocation.\n    pub fn create_region(&mut self, draft: RegionDraft) -> Result<RegionId, WorldSpatialError> {',
+            '    pub fn remove_region(&mut self, id: RegionId) -> Result<RegionState, WorldSpatialError> {': '    /// # Errors\n    /// Returns [`WorldSpatialError`] when the Region is absent or removal invalidates topology.\n    pub fn remove_region(&mut self, id: RegionId) -> Result<RegionState, WorldSpatialError> {',
+            '    pub fn validate(&self) -> Result<(), WorldSpatialError> {': '    /// # Errors\n    /// Returns [`WorldSpatialError`] when any spatial, adjacency, political, or polygon invariant fails.\n    pub fn validate(&self) -> Result<(), WorldSpatialError> {',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'missing target: {old[:60]}')
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          cargo fmt --all
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/simulation-model/src/world.rs
+          git commit -m "docs: restore spatial API error contracts"
+          git push origin HEAD:agent/stage-2-8-0-render-hardening
