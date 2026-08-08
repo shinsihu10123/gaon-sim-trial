@@ -1,4 +1,4 @@
-import type { RenderSnapshot } from "./types";
+import type { RenderSnapshot, RenderTerrainSnapshot } from "./types";
 import type { WorkerRequest, WorkerRequestPayload, WorkerResponse } from "./worker-protocol";
 
 type PendingRequest = {
@@ -10,6 +10,7 @@ export class SimulationBridge {
   private readonly worker: Worker;
   private readonly pending = new Map<number, PendingRequest>();
   private nextRequestId = 1;
+  private staticTerrain: RenderTerrainSnapshot | null = null;
 
   public constructor() {
     this.worker = new Worker(new URL("./simulation-worker.ts", import.meta.url), {
@@ -29,6 +30,7 @@ export class SimulationBridge {
   }
 
   public initialize(seedHex: string): Promise<RenderSnapshot> {
+    this.staticTerrain = null;
     return this.request({ type: "init", seedHex });
   }
 
@@ -50,6 +52,7 @@ export class SimulationBridge {
       request.reject(error);
     }
     this.pending.clear();
+    this.staticTerrain = null;
   }
 
   private request(payload: WorkerRequestPayload): Promise<RenderSnapshot> {
@@ -69,10 +72,28 @@ export class SimulationBridge {
       return;
     }
     this.pending.delete(response.id);
-    if (response.ok) {
-      request.resolve(response.snapshot);
-    } else {
+    if (!response.ok) {
       request.reject(new Error(response.error));
+      return;
     }
+
+    const snapshot = response.snapshot;
+    if (snapshot.world.terrain !== null) {
+      this.staticTerrain = snapshot.world.terrain;
+      request.resolve(snapshot);
+      return;
+    }
+    if (this.staticTerrain === null && snapshot.world.initialized) {
+      request.reject(new Error("dynamic snapshot arrived before static terrain initialization"));
+      return;
+    }
+
+    request.resolve({
+      ...snapshot,
+      world: {
+        ...snapshot.world,
+        terrain: this.staticTerrain,
+      },
+    });
   }
 }
