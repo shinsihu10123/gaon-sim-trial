@@ -189,6 +189,9 @@ pub enum CommandPayload {
     RemovePoliticalEntity {
         political_entity_id: PoliticalEntityId,
     },
+    PromotePoliticalEntityToCountry {
+        political_entity_id: PoliticalEntityId,
+    },
     CreateCountryEntity,
     RemoveCountryEntity {
         country_id: CountryId,
@@ -237,6 +240,7 @@ impl CommandPayload {
             | Self::RemoveCommunityEntity { .. }
             | Self::CreatePoliticalEntity
             | Self::RemovePoliticalEntity { .. }
+            | Self::PromotePoliticalEntityToCountry { .. }
             | Self::CreateCountryEntity
             | Self::CreateCityEntity {
                 country_id: None, ..
@@ -266,6 +270,7 @@ impl CommandPayload {
             | Self::RemoveCommunityEntity { .. }
             | Self::CreatePoliticalEntity
             | Self::RemovePoliticalEntity { .. }
+            | Self::PromotePoliticalEntityToCountry { .. }
             | Self::CreateCountryEntity
             | Self::RemoveCountryEntity { .. }
             | Self::CreateCityEntity {

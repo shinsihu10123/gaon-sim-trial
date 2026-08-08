@@ -67,6 +67,27 @@ impl SimulationEngine {
                     entity: EntityRef::political_entity(*political_entity_id),
                 }))
             }
+            CommandPayload::PromotePoliticalEntityToCountry {
+                political_entity_id,
+            } => {
+                if !self
+                    .state
+                    .entities
+                    .political_entities
+                    .contains(*political_entity_id)
+                {
+                    return Err(EntityRegistryError::UnknownEntity);
+                }
+                let country_id = self.state.entities.countries.create()?;
+                self.state
+                    .entities
+                    .political_entities
+                    .remove(*political_entity_id)?;
+                Ok(Some(EventPayload::EntityTransitioned {
+                    from: EntityRef::political_entity(*political_entity_id),
+                    to: EntityRef::country(country_id),
+                }))
+            }
             CommandPayload::CreateCountryEntity => {
                 let id = self.state.entities.countries.create()?;
                 Ok(Some(EventPayload::EntityCreated {

@@ -802,6 +802,12 @@ fn write_command_payload(bytes: &mut Vec<u8>, payload: &CommandPayload) -> Resul
             write_u8(bytes, 14);
             write_u64(bytes, political_entity_id.0);
         }
+        CommandPayload::PromotePoliticalEntityToCountry {
+            political_entity_id,
+        } => {
+            write_u8(bytes, 15);
+            write_u64(bytes, political_entity_id.0);
+        }
     }
     Ok(())
 }
@@ -842,6 +848,9 @@ fn read_command_payload(cursor: &mut Cursor<'_>) -> Result<CommandPayload, SaveE
         }),
         13 => Ok(CommandPayload::CreatePoliticalEntity),
         14 => Ok(CommandPayload::RemovePoliticalEntity {
+            political_entity_id: PoliticalEntityId(cursor.read_u64()?),
+        }),
+        15 => Ok(CommandPayload::PromotePoliticalEntityToCountry {
             political_entity_id: PoliticalEntityId(cursor.read_u64()?),
         }),
         tag => Err(SaveError::InvalidTag {
@@ -926,6 +935,11 @@ fn write_event_payload(bytes: &mut Vec<u8>, payload: EventPayload) {
         EventPayload::EntityMutationRejected { error } => {
             write_u8(bytes, 3);
             write_entity_registry_error(bytes, error);
+        }
+        EventPayload::EntityTransitioned { from, to } => {
+            write_u8(bytes, 4);
+            write_entity_ref(bytes, from);
+            write_entity_ref(bytes, to);
         }
     }
 }
@@ -1013,6 +1027,10 @@ fn read_event_payload(cursor: &mut Cursor<'_>) -> Result<EventPayload, SaveError
         }),
         3 => Ok(EventPayload::EntityMutationRejected {
             error: read_entity_registry_error(cursor)?,
+        }),
+        4 => Ok(EventPayload::EntityTransitioned {
+            from: read_entity_ref(cursor)?,
+            to: read_entity_ref(cursor)?,
         }),
         tag => Err(SaveError::InvalidTag {
             field: "event payload",

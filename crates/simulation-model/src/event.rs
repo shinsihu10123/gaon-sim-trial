@@ -33,6 +33,7 @@ pub enum EventPayload {
     CommandExecuted { command_id: CommandId },
     EntityCreated { entity: EntityRef },
     EntityRemoved { entity: EntityRef },
+    EntityTransitioned { from: EntityRef, to: EntityRef },
     EntityMutationRejected { error: EntityRegistryError },
 }
 
