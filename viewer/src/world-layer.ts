@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { RenderRegionSnapshot, RenderWorldSnapshot } from "./types";
+import { WorldSpaceTransform } from "./world-space";
 
 export class WorldTopologyLayer {
   private readonly group = new THREE.Group();
@@ -15,14 +16,9 @@ export class WorldTopologyLayer {
       return;
     }
 
-    const centerX = (world.bounds.minXM + world.bounds.maxXM) / 2;
-    const centerZ = (world.bounds.minZM + world.bounds.maxZM) / 2;
-    const extentX = world.bounds.maxXM - world.bounds.minXM;
-    const extentZ = world.bounds.maxZM - world.bounds.minZM;
-    const scale = 80 / Math.max(extentX, extentZ, 1);
-
+    const transform = new WorldSpaceTransform(world.bounds);
     for (const region of world.regions) {
-      this.group.add(this.createBoundary(region, centerX, centerZ, scale));
+      this.group.add(this.createBoundary(region, transform));
     }
   }
 
@@ -33,13 +29,10 @@ export class WorldTopologyLayer {
 
   private createBoundary(
     region: RenderRegionSnapshot,
-    centerX: number,
-    centerZ: number,
-    scale: number,
+    transform: WorldSpaceTransform,
   ): THREE.LineLoop {
-    const points = region.boundary.map(
-      (point) =>
-        new THREE.Vector3((point.xM - centerX) * scale, 0.08, (point.zM - centerZ) * scale),
+    const points = region.boundary.map((point) =>
+      transform.worldPointToScene(point.xM, point.zM, 0.08),
     );
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
