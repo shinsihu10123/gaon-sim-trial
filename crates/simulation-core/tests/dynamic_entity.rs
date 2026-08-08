@@ -1,10 +1,77 @@
 use simulation_core::SimulationEngine;
 use simulation_model::{
-    CommandError, CommandPayload, CommandTiming, CountryId, EntityRef, EntityRegistry,
-    EntityRegistryError, EventCategory, EventPayload, MapPoint, RegionDraft, RegionId,
-    RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialState,
+    CommandError, CommandPayload, CommandTiming, CommunityId, CountryId, EntityRef, EntityRegistry,
+    EntityRegistryError, EventCategory, EventPayload, HumanGroupId, MapPoint, PoliticalEntityId,
+    RegionDraft, RegionId, RegionPoliticalState, RegionState, RegionSurface, SettlementId,
+    WorldBounds, WorldSpatialState,
 };
 use simulation_save::{create_bundle, SaveKind};
+
+#[test]
+fn civilization_origin_entities_exist_before_any_country() {
+    let mut engine = SimulationEngine::new(3);
+    assert!(engine.state().entities.countries.is_empty());
+
+    for payload in [
+        CommandPayload::CreateHumanGroupEntity,
+        CommandPayload::CreateSettlementEntity,
+        CommandPayload::CreateCommunityEntity,
+        CommandPayload::CreatePoliticalEntity,
+    ] {
+        engine
+            .submit_system_command(CommandTiming::Immediate, payload)
+            .expect("pre-state lifecycle command");
+        engine.tick();
+    }
+
+    assert!(
+        engine
+            .state()
+            .entities
+            .human_groups
+            .contains(HumanGroupId(1))
+    );
+    assert!(
+        engine
+            .state()
+            .entities
+            .settlements
+            .contains(SettlementId(1))
+    );
+    assert!(
+        engine
+            .state()
+            .entities
+            .communities
+            .contains(CommunityId(1))
+    );
+    assert!(
+        engine
+            .state()
+            .entities
+            .political_entities
+            .contains(PoliticalEntityId(1))
+    );
+    assert!(engine.state().entities.countries.is_empty());
+
+    let created: Vec<_> = engine
+        .event_log()
+        .iter()
+        .filter_map(|event| match event.payload {
+            EventPayload::EntityCreated { entity } => Some(entity),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        created,
+        vec![
+            EntityRef::human_group(HumanGroupId(1)),
+            EntityRef::settlement(SettlementId(1)),
+            EntityRef::community(CommunityId(1)),
+            EntityRef::political_entity(PoliticalEntityId(1)),
+        ]
+    );
+}
 
 #[test]
 fn lifecycle_ids_are_monotonic_non_reused_and_audited() {
@@ -69,7 +136,7 @@ fn entity_lifecycle_payloads_require_system_source() {
     assert_eq!(
         engine.submit_user_command(
             CommandTiming::Immediate,
-            CommandPayload::CreateCountryEntity
+            CommandPayload::CreateHumanGroupEntity
         ),
         Err(CommandError::InvalidSourceForPayload)
     );
@@ -120,6 +187,53 @@ fn referenced_country_removal_is_rejected_without_mutation() {
 }
 
 #[test]
+fn pre_state_save_load_preserves_all_allocators() {
+    let mut engine = SimulationEngine::new(17);
+    for payload in [
+        CommandPayload::CreateHumanGroupEntity,
+        CommandPayload::RemoveHumanGroupEntity {
+            human_group_id: HumanGroupId(1),
+        },
+        CommandPayload::CreateHumanGroupEntity,
+        CommandPayload::CreateSettlementEntity,
+        CommandPayload::CreateCommunityEntity,
+        CommandPayload::CreatePoliticalEntity,
+    ] {
+        engine
+            .submit_system_command(CommandTiming::Immediate, payload)
+            .expect("pre-state lifecycle command");
+        engine.tick();
+    }
+
+    let bundle = engine
+        .save_bundle(SaveKind::Manual)
+        .expect("pre-state entity world must save");
+    let mut restored = SimulationEngine::from_save_bundle(&bundle).expect("pre-state save restores");
+
+    assert_eq!(restored.export_snapshot(), engine.export_snapshot());
+    assert_eq!(restored.state().entities.human_groups.next_id(), 3);
+    assert_eq!(restored.state().entities.settlements.next_id(), 2);
+    assert_eq!(restored.state().entities.communities.next_id(), 2);
+    assert_eq!(restored.state().entities.political_entities.next_id(), 2);
+    assert!(restored.state().entities.countries.is_empty());
+
+    restored
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateHumanGroupEntity,
+        )
+        .expect("post-restore group create");
+    restored.tick();
+    assert!(
+        restored
+            .state()
+            .entities
+            .human_groups
+            .contains(HumanGroupId(3))
+    );
+}
+
+#[test]
 fn save_load_preserves_allocator_and_next_creation_identity() {
     let mut engine = SimulationEngine::new(19);
     for payload in [
@@ -153,8 +267,84 @@ fn save_load_preserves_allocator_and_next_creation_identity() {
 }
 
 #[test]
-fn lifecycle_command_journal_replay_matches_authoritative_digest() {
+fn political_entity_can_transition_to_country_without_predefining_emergence_cause() {
+    let mut engine = SimulationEngine::new(21);
+    engine
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreatePoliticalEntity,
+        )
+        .expect("political entity create");
+    engine.tick();
+    assert!(
+        engine
+            .state()
+            .entities
+            .political_entities
+            .contains(PoliticalEntityId(1))
+    );
+    assert!(engine.state().entities.countries.is_empty());
+
+    engine
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::PromotePoliticalEntityToCountry {
+                political_entity_id: PoliticalEntityId(1),
+            },
+        )
+        .expect("promotion command");
+    engine.tick();
+
+    assert!(engine.state().entities.political_entities.is_empty());
+    assert!(engine.state().entities.countries.contains(CountryId(1)));
+    assert!(engine.event_log().iter().any(|event| {
+        matches!(
+            event.payload,
+            EventPayload::EntityTransitioned { from, to }
+                if from == EntityRef::political_entity(PoliticalEntityId(1))
+                    && to == EntityRef::country(CountryId(1))
+        )
+    }));
+}
+
+#[test]
+fn pre_state_and_country_transition_journal_replay_matches_authoritative_digest() {
     let mut engine = SimulationEngine::new(23);
+    for payload in [
+        CommandPayload::CreateHumanGroupEntity,
+        CommandPayload::CreateSettlementEntity,
+        CommandPayload::CreateCommunityEntity,
+        CommandPayload::CreatePoliticalEntity,
+        CommandPayload::PromotePoliticalEntityToCountry {
+            political_entity_id: PoliticalEntityId(1),
+        },
+    ] {
+        engine
+            .submit_system_command(CommandTiming::Immediate, payload)
+            .expect("civilization-origin lifecycle command");
+        engine.tick();
+    }
+
+    let journal = engine.accepted_command_journal();
+    let replayed = SimulationEngine::replay_from_journal(
+        engine.state().seed,
+        engine.state().elapsed_days,
+        &journal,
+    )
+    .expect("civilization-origin journal must replay");
+
+    assert_eq!(replayed.export_snapshot(), engine.export_snapshot());
+    assert_eq!(
+        replayed
+            .authoritative_state_digest()
+            .expect("replay digest"),
+        engine.authoritative_state_digest().expect("source digest")
+    );
+}
+
+#[test]
+fn lifecycle_command_journal_replay_matches_authoritative_digest() {
+    let mut engine = SimulationEngine::new(29);
     engine
         .submit_system_command(
             CommandTiming::Immediate,
