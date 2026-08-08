@@ -1,6 +1,6 @@
 # Stage 2.6 Initial Human Groups and Ecological Placement
 
-Status: **IN PROGRESS — INTEGRATION VALIDATION**
+Status: **IN PROGRESS — PERMANENT CI VALIDATION**
 
 Authoritative scope: WBS v3.1 civilization-origin revision.
 
@@ -48,4 +48,4 @@ No item is complete until implementation, permanent Core/Viewer validation and e
 
 ## Current integration gate
 
-The one-shot migration has been applied to the feature branch. PR #14 now validates the integrated implementation through permanent Core and Viewer CI. The temporary migration workflow/script will be removed before the final evidence head.
+The one-shot source migration and first strict-Clippy documentation normalization have been applied. PR #14 is now running permanent Core and Viewer CI on the integrated implementation. Any remaining failure will be treated as an implementation or acceptance-test defect and corrected before cleanup/evidence.
