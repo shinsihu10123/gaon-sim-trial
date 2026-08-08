@@ -5,6 +5,7 @@ import { SpatialEventFocusController, type SpatialFocusEvent } from "./event-foc
 import { EntitySelectionPanel } from "./selection-panel";
 import { SimulationBridge } from "./simulation-bridge";
 import { TerrainLayer } from "./terrain-layer";
+import type { RenderSnapshot } from "./types";
 import { WorldCameraController } from "./world-camera";
 import { WorldTopologyLayer } from "./world-layer";
 import "./style.css";
@@ -50,9 +51,7 @@ const selectionLayer = new EntitySelectionLayer(scene);
 const selectionPanel = new EntitySelectionPanel(root);
 const bridge = new SimulationBridge();
 
-selectionPanel.onSelectionChanged = (target) => {
-  selectionLayer.select(target);
-};
+selectionPanel.onSelectionChanged = (target) => selectionLayer.select(target);
 selectionPanel.onFocusRequested = (target) => {
   selectionLayer.select(target);
   cameraController.focusScenePoint(target.scenePoint);
@@ -66,25 +65,13 @@ renderer.domElement.addEventListener("pointerdown", (event) => {
   pointerDownY = event.clientY;
 });
 renderer.domElement.addEventListener("pointerup", (event) => {
-  if (Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY) > 5) {
-    return;
-  }
-  const target = selectionLayer.pickFromClientPoint(
-    event.clientX,
-    event.clientY,
-    camera,
-    renderer.domElement,
-  );
+  if (Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY) > 5) return;
+  const target = selectionLayer.pickFromClientPoint(event.clientX, event.clientY, camera, renderer.domElement);
   selectionLayer.select(target);
   selectionPanel.setSelected(target);
 });
 renderer.domElement.addEventListener("dblclick", (event) => {
-  const target = selectionLayer.pickFromClientPoint(
-    event.clientX,
-    event.clientY,
-    camera,
-    renderer.domElement,
-  );
+  const target = selectionLayer.pickFromClientPoint(event.clientX, event.clientY, camera, renderer.domElement);
   if (target !== undefined) {
     selectionLayer.select(target);
     selectionPanel.setSelected(target);
@@ -109,20 +96,31 @@ function frame(): void {
 }
 frame();
 
-const snapshot = await bridge.initialize("00000000000007ea");
-const hasTerrain = snapshot.world.terrain !== null;
-stagingPlane.visible = !hasTerrain;
-stagingGrid.visible = !hasTerrain;
-terrainLayer.update(snapshot.world.bounds, snapshot.world.terrain);
-topologyLayer.update(snapshot.world);
-selectionLayer.update(snapshot.world);
-selectionPanel.setTargets(selectionLayer.listTargets());
-cameraController.setWorldBounds(snapshot.world.bounds);
+function applySnapshot(snapshot: RenderSnapshot): void {
+  const hasTerrain = snapshot.world.terrain !== null;
+  stagingPlane.visible = !hasTerrain;
+  stagingGrid.visible = !hasTerrain;
+  terrainLayer.update(snapshot.world.bounds, snapshot.world.terrain);
+  topologyLayer.update(snapshot.world);
+  selectionLayer.update(snapshot.world);
+  selectionPanel.setTargets(selectionLayer.listTargets());
+  const selected = selectionLayer.selectedTarget();
+  selectionPanel.setSelected(selected);
+  cameraController.setWorldBounds(snapshot.world.bounds);
 
-const terrain = snapshot.world.terrain;
-panel.textContent = terrain === null
-  ? `Year ${snapshot.date.year} · terrain unavailable · ${snapshot.authoritativeDigestHex}`
-  : `Year ${snapshot.date.year} · terrain ${terrain.width}×${terrain.height} · regions ${snapshot.world.regions.length} · human groups ${snapshot.world.humanGroups.length} · ${snapshot.authoritativeDigestHex}`;
+  const terrain = snapshot.world.terrain;
+  panel.textContent = terrain === null
+    ? `Year ${snapshot.date.year} · terrain unavailable · ${snapshot.authoritativeDigestHex}`
+    : `Year ${snapshot.date.year} · terrain ${terrain.width}×${terrain.height} · regions ${snapshot.world.regions.length} · human groups ${snapshot.world.humanGroups.length} · ${snapshot.authoritativeDigestHex}`;
+}
+
+applySnapshot(await bridge.initialize("00000000000007ea"));
+
+export async function advanceViewerDays(days: number): Promise<RenderSnapshot> {
+  const snapshot = await bridge.advanceDays(days);
+  applySnapshot(snapshot);
+  return snapshot;
+}
 
 export function autoFocusSpatialEvent(event: SpatialFocusEvent): boolean {
   return eventFocusController.handle(event);
