@@ -11,8 +11,8 @@ use simulation_model::{
     WorldState,
 };
 
-/// Stage 2.5 adds dynamic entity registries and stable allocator state.
-pub const SAVE_FORMAT_VERSION: u32 = 5;
+/// Stage 2.6 adds authoritative Year-1 `HumanGroup` ecological seed state.
+pub const SAVE_FORMAT_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -337,6 +337,27 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
             if !world.entities.countries.contains(country) {
                 return Err(SaveError::SnapshotInvariant(
                     "Region references an unknown active country",
+                ));
+            }
+        }
+    }
+    for group in world.entities.human_groups.iter() {
+        if let Some(initial) = &group.initial {
+            if !initial.is_valid()
+                || world.spatial.region(initial.region_id).is_none()
+                || world.spatial.bounds.is_some_and(|bounds| {
+                    initial.x_m < bounds.min_x_m
+                        || initial.x_m > bounds.max_x_m
+                        || initial.z_m < bounds.min_z_m
+                        || initial.z_m > bounds.max_z_m
+                })
+                || world.terrain.as_ref().is_some_and(|terrain| {
+                    usize::try_from(initial.terrain_sample_index)
+                        .map_or(true, |index| index >= terrain.samples.len())
+                })
+            {
+                return Err(SaveError::SnapshotInvariant(
+                    "HumanGroup initial state references invalid geography",
                 ));
             }
         }

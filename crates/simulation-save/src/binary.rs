@@ -3,12 +3,13 @@ use simulation_model::{
     CommandPayload, CommandPriority, CommandSource, CommunityEntity, CommunityId,
     CommunityRegistry, CountryEntity, CountryId, CountryRegistry, EntityKind, EntityRef,
     EntityRegistry, EntityRegistryError, EntityWorldState, EventCategory, EventId, EventPayload,
-    EventRecord, EventSource, HumanGroupEntity, HumanGroupId, HumanGroupRegistry, MapPoint,
-    PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, QueuedCommand, RegionDraft,
-    RegionId, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface, ReliefClass,
-    ResourceCellState, ResourceDeposit, ResourceFieldState, SettlementEntity, SettlementId,
-    SettlementRegistry, SimulationDate, StableEntityId, TerrainSample, TerrainState, WorldBounds,
-    WorldSpatialState, WorldState,
+    EventRecord, EventSource, HumanGroupBehaviorProfile, HumanGroupEntity, HumanGroupId,
+    HumanGroupInitialState, HumanGroupRegistry, InitialKnowledgeProfile, KnowledgeSeedValue,
+    MapPoint, PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, QueuedCommand,
+    RegionDraft, RegionId, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface,
+    ReliefClass, ResourceCellState, ResourceDeposit, ResourceFieldState, SettlementEntity,
+    SettlementId, SettlementRegistry, SimulationDate, StableEntityId, TerrainSample, TerrainState,
+    WorldBounds, WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -138,7 +139,7 @@ fn write_world(bytes: &mut Vec<u8>, world: &WorldState) -> Result<(), SaveError>
     write_u64(bytes, world.entities.human_groups.next_id());
     write_count(bytes, "human_groups", world.entities.human_groups.len())?;
     for group in world.entities.human_groups.iter() {
-        write_u64(bytes, group.id.0);
+        write_human_group(bytes, group)?;
     }
 
     write_u64(bytes, world.entities.settlements.next_id());
@@ -254,9 +255,7 @@ fn read_entity_world(cursor: &mut Cursor<'_>) -> Result<EntityWorldState, SaveEr
     let human_group_count = cursor.read_count("human_groups")?;
     let mut human_groups = Vec::with_capacity(human_group_count);
     for _ in 0..human_group_count {
-        human_groups.push(HumanGroupEntity {
-            id: HumanGroupId(cursor.read_u64()?),
-        });
+        human_groups.push(read_human_group(cursor)?);
     }
     let human_groups = HumanGroupRegistry::from_parts(human_group_next_id, human_groups)
         .map_err(|_| SaveError::InvalidBinary("invalid HumanGroup registry"))?;
@@ -327,6 +326,83 @@ fn read_entity_world(cursor: &mut Cursor<'_>) -> Result<EntityWorldState, SaveEr
         countries,
         cities,
     })
+}
+
+fn write_human_group(bytes: &mut Vec<u8>, group: &HumanGroupEntity) -> Result<(), SaveError> {
+    write_u64(bytes, group.id.0);
+    match &group.initial {
+        None => write_u8(bytes, 0),
+        Some(initial) => {
+            write_u8(bytes, 1);
+            write_u64(bytes, initial.region_id.0);
+            write_i32(bytes, initial.x_m);
+            write_i32(bytes, initial.z_m);
+            write_u32(bytes, initial.terrain_sample_index);
+            write_u64(bytes, initial.population);
+            write_u64(bytes, initial.food_stock_person_days);
+            write_u64(bytes, initial.basic_resource_stock_units);
+            write_u16(bytes, initial.behavior.mobility_permille);
+            write_u16(bytes, initial.behavior.exploration_permille);
+            write_u16(bytes, initial.behavior.settlement_bias_permille);
+            write_count(
+                bytes,
+                "knowledge_seed_values",
+                initial.knowledge.entries.len(),
+            )?;
+            for entry in &initial.knowledge.entries {
+                write_u32(bytes, entry.domain_key);
+                write_u16(bytes, entry.level_permille);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn read_human_group(cursor: &mut Cursor<'_>) -> Result<HumanGroupEntity, SaveError> {
+    let id = HumanGroupId(cursor.read_u64()?);
+    let initial = match cursor.read_u8()? {
+        0 => None,
+        1 => {
+            let region_id = RegionId(cursor.read_u64()?);
+            let x_m = cursor.read_i32()?;
+            let z_m = cursor.read_i32()?;
+            let terrain_sample_index = cursor.read_u32()?;
+            let population = cursor.read_u64()?;
+            let food_stock_person_days = cursor.read_u64()?;
+            let basic_resource_stock_units = cursor.read_u64()?;
+            let behavior = HumanGroupBehaviorProfile {
+                mobility_permille: cursor.read_u16()?,
+                exploration_permille: cursor.read_u16()?,
+                settlement_bias_permille: cursor.read_u16()?,
+            };
+            let knowledge_count = cursor.read_count("knowledge_seed_values")?;
+            let mut entries = Vec::with_capacity(knowledge_count);
+            for _ in 0..knowledge_count {
+                entries.push(KnowledgeSeedValue {
+                    domain_key: cursor.read_u32()?,
+                    level_permille: cursor.read_u16()?,
+                });
+            }
+            Some(HumanGroupInitialState {
+                region_id,
+                x_m,
+                z_m,
+                terrain_sample_index,
+                population,
+                food_stock_person_days,
+                basic_resource_stock_units,
+                behavior,
+                knowledge: InitialKnowledgeProfile { entries },
+            })
+        }
+        tag => {
+            return Err(SaveError::InvalidTag {
+                field: "HumanGroup initial state",
+                tag,
+            });
+        }
+    };
+    Ok(HumanGroupEntity { id, initial })
 }
 
 fn write_terrain(bytes: &mut Vec<u8>, terrain: &TerrainState) -> Result<(), SaveError> {

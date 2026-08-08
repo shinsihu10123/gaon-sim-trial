@@ -45,11 +45,25 @@ export interface RenderRegionSnapshot {
   controller: string | null;
 }
 
+export interface RenderHumanGroupSnapshot {
+  id: string;
+  regionId: string;
+  xM: number;
+  zM: number;
+  population: number;
+  foodStockPersonDays: number;
+  basicResourceStockUnits: number;
+  mobilityPermille: number;
+  explorationPermille: number;
+  settlementBiasPermille: number;
+}
+
 export interface RenderWorldSnapshot {
   initialized: boolean;
   bounds: RenderWorldBounds | null;
   terrain: RenderTerrainSnapshot | null;
   regions: RenderRegionSnapshot[];
+  humanGroups: RenderHumanGroupSnapshot[];
 }
 
 export interface RenderSnapshot {

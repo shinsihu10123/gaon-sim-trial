@@ -2,10 +2,11 @@
 
 use serde::Serialize;
 use simulation_model::{
-    BiomeClass, MapPoint, RegionSurface, ReliefClass, TerrainState, WorldBounds, WorldState,
+    BiomeClass, EntityRegistry, MapPoint, RegionSurface, ReliefClass, TerrainState, WorldBounds,
+    WorldState,
 };
 
-pub const RENDER_SNAPSHOT_VERSION: u32 = 4;
+pub const RENDER_SNAPSHOT_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +59,7 @@ pub struct RenderWorldSnapshot {
     pub bounds: Option<RenderWorldBounds>,
     pub terrain: Option<RenderTerrainSnapshot>,
     pub regions: Vec<RenderRegionSnapshot>,
+    pub human_groups: Vec<RenderHumanGroupSnapshot>,
 }
 
 impl RenderWorldSnapshot {
@@ -78,8 +80,45 @@ impl RenderWorldSnapshot {
                 .iter()
                 .map(RenderRegionSnapshot::from)
                 .collect(),
+            human_groups: world
+                .entities
+                .human_groups
+                .iter()
+                .filter_map(|group| {
+                    group
+                        .initial
+                        .as_ref()
+                        .map(|initial| RenderHumanGroupSnapshot {
+                            id: group.id.0.to_string(),
+                            region_id: initial.region_id.0.to_string(),
+                            x_m: initial.x_m,
+                            z_m: initial.z_m,
+                            population: initial.population,
+                            food_stock_person_days: initial.food_stock_person_days,
+                            basic_resource_stock_units: initial.basic_resource_stock_units,
+                            mobility_permille: initial.behavior.mobility_permille,
+                            exploration_permille: initial.behavior.exploration_permille,
+                            settlement_bias_permille: initial.behavior.settlement_bias_permille,
+                        })
+                })
+                .collect(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderHumanGroupSnapshot {
+    pub id: String,
+    pub region_id: String,
+    pub x_m: i32,
+    pub z_m: i32,
+    pub population: u64,
+    pub food_stock_person_days: u64,
+    pub basic_resource_stock_units: u64,
+    pub mobility_permille: u16,
+    pub exploration_permille: u16,
+    pub settlement_bias_permille: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
