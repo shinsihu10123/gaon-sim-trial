@@ -11,7 +11,10 @@ fn lifecycle_ids_are_monotonic_non_reused_and_audited() {
     let mut engine = SimulationEngine::new(7);
 
     engine
-        .submit_system_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity)
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity,
+        )
         .expect("system create command");
     engine.tick();
     assert!(engine.state().entities.countries.contains(CountryId(1)));
@@ -28,7 +31,10 @@ fn lifecycle_ids_are_monotonic_non_reused_and_audited() {
     assert!(!engine.state().entities.countries.contains(CountryId(1)));
 
     engine
-        .submit_system_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity)
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity,
+        )
         .expect("second system create command");
     engine.tick();
     assert!(engine.state().entities.countries.contains(CountryId(2)));
@@ -61,7 +67,10 @@ fn entity_lifecycle_payloads_require_system_source() {
     let mut engine = SimulationEngine::new(1);
     let before = engine.pending_commands().len();
     assert_eq!(
-        engine.submit_user_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity),
+        engine.submit_user_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity
+        ),
         Err(CommandError::InvalidSourceForPayload)
     );
     assert_eq!(engine.pending_commands().len(), before);
@@ -71,7 +80,10 @@ fn entity_lifecycle_payloads_require_system_source() {
 fn referenced_country_removal_is_rejected_without_mutation() {
     let mut engine = SimulationEngine::new(11);
     engine
-        .submit_system_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity)
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity,
+        )
         .expect("country create");
     engine.tick();
 
@@ -131,7 +143,10 @@ fn save_load_preserves_allocator_and_next_creation_identity() {
     assert_eq!(restored.state().entities.countries.next_id(), 3);
 
     restored
-        .submit_system_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity)
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity,
+        )
         .expect("post-restore create");
     restored.tick();
     assert!(restored.state().entities.countries.contains(CountryId(3)));
@@ -141,7 +156,10 @@ fn save_load_preserves_allocator_and_next_creation_identity() {
 fn lifecycle_command_journal_replay_matches_authoritative_digest() {
     let mut engine = SimulationEngine::new(23);
     engine
-        .submit_system_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity)
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity,
+        )
         .expect("create 1");
     engine.tick();
     engine
@@ -154,7 +172,10 @@ fn lifecycle_command_journal_replay_matches_authoritative_digest() {
         .expect("remove 1");
     engine.tick();
     engine
-        .submit_system_command(CommandTiming::Immediate, CommandPayload::CreateCountryEntity)
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::CreateCountryEntity,
+        )
         .expect("create 2");
     engine.tick();
 
@@ -218,7 +239,9 @@ fn region_registry_save_load_preserves_sparse_identity_and_allocator() {
     assert!(engine.state().spatial.region(RegionId(2)).is_none());
     assert_eq!(engine.state().spatial.regions.next_id(), 4);
 
-    let saved = engine.save_bundle(SaveKind::Manual).expect("registry saves");
+    let saved = engine
+        .save_bundle(SaveKind::Manual)
+        .expect("registry saves");
     let restored = SimulationEngine::from_save_bundle(&saved).expect("registry restores");
     assert_eq!(restored.state().spatial.regions.next_id(), 4);
     assert!(restored.state().spatial.region(RegionId(1)).is_some());
