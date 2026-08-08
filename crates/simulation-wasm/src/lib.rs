@@ -130,7 +130,7 @@ mod tests {
         assert!(restored.state().terrain.is_some());
         assert!(restored.state().resources.is_some());
         assert_eq!(restored.state().spatial.regions.iter().count(), 60);
-        assert_eq!(restored.state().entities.human_groups.iter().count(), 8);
+        assert_eq!(restored.state().entities.human_groups.next_id(), 9);
         assert_eq!(restored.state().seed, seed);
     }
 }
