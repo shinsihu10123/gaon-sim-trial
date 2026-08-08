@@ -34,3 +34,10 @@ jobs:
         run: npm run build --prefix viewer
       - name: Verify Stage 1.1 ownership contract
         run: node scripts/check-viewer-contract.mjs
+      - name: Upload Viewer preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewer-preview-${{ github.sha }}
+          path: viewer/dist
+          if-no-files-found: error
+          retention-days: 7
