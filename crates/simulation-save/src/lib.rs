@@ -11,8 +11,8 @@ use simulation_model::{
     WorldState,
 };
 
-/// Stage 2.6 adds authoritative Year-1 `HumanGroup` ecological seed state.
-pub const SAVE_FORMAT_VERSION: u32 = 6;
+/// Stage 3.1 adds authoritative `HumanGroupState` persistence.
+pub const SAVE_FORMAT_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -358,6 +358,16 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
             {
                 return Err(SaveError::SnapshotInvariant(
                     "HumanGroup initial state references invalid geography",
+                ));
+            }
+        }
+        if let Some(state) = &group.state {
+            if state.id != group.id
+                || !state.is_valid()
+                || world.spatial.region(state.region_id).is_none()
+            {
+                return Err(SaveError::SnapshotInvariant(
+                    "invalid HumanGroup runtime state",
                 ));
             }
         }

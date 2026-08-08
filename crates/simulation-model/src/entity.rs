@@ -189,6 +189,31 @@ pub struct HumanGroupState {
 
 impl HumanGroupState {
     #[must_use]
+    pub fn from_initial(
+        id: HumanGroupId,
+        initial: &HumanGroupInitialState,
+        seed: HumanGroupRuntimeSeed,
+    ) -> Self {
+        Self {
+            id,
+            region_id: initial.region_id,
+            x_m: initial.x_m,
+            z_m: initial.z_m,
+            terrain_sample_index: initial.terrain_sample_index,
+            population: initial.population,
+            mobility_permille: initial.behavior.mobility_permille,
+            food_stock_person_days: initial.food_stock_person_days,
+            basic_resource_stock_units: initial.basic_resource_stock_units,
+            nutrition_permille: seed.nutrition_permille,
+            cohesion_permille: seed.cohesion_permille,
+            risk_permille: seed.risk_permille,
+            knowledge_ref: None,
+            memory_ref: None,
+            lineage: HumanGroupLineage::default(),
+        }
+    }
+
+    #[must_use]
     pub fn is_valid(&self) -> bool {
         self.id.0 != 0
             && self.region_id.0 != 0
@@ -200,6 +225,23 @@ impl HumanGroupState {
             && self.knowledge_ref.map_or(true, KnowledgeStateRef::is_valid)
             && self.memory_ref.map_or(true, MemoryStateRef::is_valid)
             && self.lineage.is_valid_for(self.id)
+    }
+}
+
+/// Explicit scenario input for initializing Stage 3 runtime indicators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HumanGroupRuntimeSeed {
+    pub nutrition_permille: u16,
+    pub cohesion_permille: u16,
+    pub risk_permille: u16,
+}
+
+impl HumanGroupRuntimeSeed {
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.nutrition_permille <= 1_000
+            && self.cohesion_permille <= 1_000
+            && self.risk_permille <= 1_000
     }
 }
 
@@ -429,6 +471,7 @@ macro_rules! identity_registry {
 pub struct HumanGroupEntity {
     pub id: HumanGroupId,
     pub initial: Option<HumanGroupInitialState>,
+    pub state: Option<HumanGroupState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -461,6 +504,10 @@ impl HumanGroupRegistry {
                     .initial
                     .as_ref()
                     .is_some_and(|initial| !initial.is_valid())
+                || record
+                    .state
+                    .as_ref()
+                    .is_some_and(|state| state.id != record.id || !state.is_valid())
             {
                 return Err(EntityRegistryError::InvalidReference);
             }
@@ -478,7 +525,7 @@ impl HumanGroupRegistry {
     /// # Errors
     /// Returns [`EntityRegistryError::IdExhausted`] if ID space is exhausted.
     pub fn create(&mut self) -> Result<HumanGroupId, EntityRegistryError> {
-        self.create_record(None)
+        self.create_record(None, None)
     }
 
     /// Creates a Year-1 `HumanGroup` with its authoritative initial ecological state.
@@ -492,15 +539,44 @@ impl HumanGroupRegistry {
         if !initial.is_valid() {
             return Err(EntityRegistryError::InvalidReference);
         }
-        self.create_record(Some(initial))
+        self.create_record(Some(initial), None)
+    }
+
+    /// Creates an initialized group with authoritative Stage 3 runtime state.
+    ///
+    /// # Errors
+    /// Returns [`EntityRegistryError`] for invalid inputs or exhausted IDs.
+    pub fn create_initialized_with_runtime(
+        &mut self,
+        initial: HumanGroupInitialState,
+        runtime_seed: HumanGroupRuntimeSeed,
+    ) -> Result<HumanGroupId, EntityRegistryError> {
+        if !initial.is_valid() || !runtime_seed.is_valid() {
+            return Err(EntityRegistryError::InvalidReference);
+        }
+        let id = HumanGroupId(allocate_id(&mut self.next_id)?);
+        let state = HumanGroupState::from_initial(id, &initial, runtime_seed);
+        let previous = self.entries.insert(
+            id,
+            HumanGroupEntity {
+                id,
+                initial: Some(initial),
+                state: Some(state),
+            },
+        );
+        debug_assert!(previous.is_none());
+        Ok(id)
     }
 
     fn create_record(
         &mut self,
         initial: Option<HumanGroupInitialState>,
+        state: Option<HumanGroupState>,
     ) -> Result<HumanGroupId, EntityRegistryError> {
         let id = HumanGroupId(allocate_id(&mut self.next_id)?);
-        let previous = self.entries.insert(id, HumanGroupEntity { id, initial });
+        let previous = self
+            .entries
+            .insert(id, HumanGroupEntity { id, initial, state });
         debug_assert!(previous.is_none());
         Ok(id)
     }

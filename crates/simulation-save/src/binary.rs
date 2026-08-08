@@ -4,12 +4,13 @@ use simulation_model::{
     CommunityRegistry, CountryEntity, CountryId, CountryRegistry, EntityKind, EntityRef,
     EntityRegistry, EntityRegistryError, EntityWorldState, EventCategory, EventId, EventPayload,
     EventRecord, EventSource, HumanGroupBehaviorProfile, HumanGroupEntity, HumanGroupId,
-    HumanGroupInitialState, HumanGroupRegistry, InitialKnowledgeProfile, KnowledgeSeedValue,
-    MapPoint, PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, QueuedCommand,
-    RegionDraft, RegionId, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface,
-    ReliefClass, ResourceCellState, ResourceDeposit, ResourceFieldState, SettlementEntity,
-    SettlementId, SettlementRegistry, SimulationDate, StableEntityId, TerrainSample, TerrainState,
-    WorldBounds, WorldSpatialState, WorldState,
+    HumanGroupInitialState, HumanGroupLineage, HumanGroupRegistry, HumanGroupState,
+    InitialKnowledgeProfile, KnowledgeSeedValue, KnowledgeStateRef, MapPoint, MemoryStateRef,
+    PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, QueuedCommand, RegionDraft,
+    RegionId, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface, ReliefClass,
+    ResourceCellState, ResourceDeposit, ResourceFieldState, SettlementEntity, SettlementId,
+    SettlementRegistry, SimulationDate, StableEntityId, TerrainSample, TerrainState, WorldBounds,
+    WorldSpatialState, WorldState,
 };
 
 use crate::{EngineSnapshot, SaveError, SAVE_FORMAT_VERSION};
@@ -355,6 +356,48 @@ fn write_human_group(bytes: &mut Vec<u8>, group: &HumanGroupEntity) -> Result<()
             }
         }
     }
+    match &group.state {
+        None => write_u8(bytes, 0),
+        Some(state) => {
+            write_u8(bytes, 1);
+            write_u64(bytes, state.id.0);
+            write_u64(bytes, state.region_id.0);
+            write_i32(bytes, state.x_m);
+            write_i32(bytes, state.z_m);
+            write_u32(bytes, state.terrain_sample_index);
+            write_u64(bytes, state.population);
+            write_u16(bytes, state.mobility_permille);
+            write_u64(bytes, state.food_stock_person_days);
+            write_u64(bytes, state.basic_resource_stock_units);
+            write_u16(bytes, state.nutrition_permille);
+            write_u16(bytes, state.cohesion_permille);
+            write_u16(bytes, state.risk_permille);
+            match state.knowledge_ref {
+                None => write_u8(bytes, 0),
+                Some(r) => {
+                    write_u8(bytes, 1);
+                    write_u64(bytes, r.0);
+                }
+            }
+            match state.memory_ref {
+                None => write_u8(bytes, 0),
+                Some(r) => {
+                    write_u8(bytes, 1);
+                    write_u64(bytes, r.0);
+                }
+            }
+            write_optional_human_group(bytes, state.lineage.parent);
+            write_optional_human_group(bytes, state.lineage.split_from);
+            write_count(
+                bytes,
+                "human_group_merged_lineage",
+                state.lineage.merged_from.len(),
+            )?;
+            for source in &state.lineage.merged_from {
+                write_u64(bytes, source.0);
+            }
+        }
+    }
     Ok(())
 }
 
@@ -402,7 +445,98 @@ fn read_human_group(cursor: &mut Cursor<'_>) -> Result<HumanGroupEntity, SaveErr
             });
         }
     };
-    Ok(HumanGroupEntity { id, initial })
+    let state = match cursor.read_u8()? {
+        0 => None,
+        1 => {
+            let state_id = HumanGroupId(cursor.read_u64()?);
+            let region_id = RegionId(cursor.read_u64()?);
+            let x_m = cursor.read_i32()?;
+            let z_m = cursor.read_i32()?;
+            let terrain_sample_index = cursor.read_u32()?;
+            let population = cursor.read_u64()?;
+            let mobility_permille = cursor.read_u16()?;
+            let food_stock_person_days = cursor.read_u64()?;
+            let basic_resource_stock_units = cursor.read_u64()?;
+            let nutrition_permille = cursor.read_u16()?;
+            let cohesion_permille = cursor.read_u16()?;
+            let risk_permille = cursor.read_u16()?;
+            let knowledge_ref = match cursor.read_u8()? {
+                0 => None,
+                1 => Some(KnowledgeStateRef(cursor.read_u64()?)),
+                tag => {
+                    return Err(SaveError::InvalidTag {
+                        field: "HumanGroup knowledge ref",
+                        tag,
+                    })
+                }
+            };
+            let memory_ref = match cursor.read_u8()? {
+                0 => None,
+                1 => Some(MemoryStateRef(cursor.read_u64()?)),
+                tag => {
+                    return Err(SaveError::InvalidTag {
+                        field: "HumanGroup memory ref",
+                        tag,
+                    })
+                }
+            };
+            let parent = read_optional_human_group(cursor)?;
+            let split_from = read_optional_human_group(cursor)?;
+            let count = cursor.read_count("human_group_merged_lineage")?;
+            let mut merged_from = Vec::with_capacity(count);
+            for _ in 0..count {
+                merged_from.push(HumanGroupId(cursor.read_u64()?));
+            }
+            Some(HumanGroupState {
+                id: state_id,
+                region_id,
+                x_m,
+                z_m,
+                terrain_sample_index,
+                population,
+                mobility_permille,
+                food_stock_person_days,
+                basic_resource_stock_units,
+                nutrition_permille,
+                cohesion_permille,
+                risk_permille,
+                knowledge_ref,
+                memory_ref,
+                lineage: HumanGroupLineage {
+                    parent,
+                    split_from,
+                    merged_from,
+                },
+            })
+        }
+        tag => {
+            return Err(SaveError::InvalidTag {
+                field: "HumanGroup runtime state",
+                tag,
+            })
+        }
+    };
+    Ok(HumanGroupEntity { id, initial, state })
+}
+
+fn write_optional_human_group(bytes: &mut Vec<u8>, id: Option<HumanGroupId>) {
+    match id {
+        None => write_u8(bytes, 0),
+        Some(id) => {
+            write_u8(bytes, 1);
+            write_u64(bytes, id.0);
+        }
+    }
+}
+fn read_optional_human_group(cursor: &mut Cursor<'_>) -> Result<Option<HumanGroupId>, SaveError> {
+    match cursor.read_u8()? {
+        0 => Ok(None),
+        1 => Ok(Some(HumanGroupId(cursor.read_u64()?))),
+        tag => Err(SaveError::InvalidTag {
+            field: "optional HumanGroup id",
+            tag,
+        }),
+    }
 }
 
 fn write_terrain(bytes: &mut Vec<u8>, terrain: &TerrainState) -> Result<(), SaveError> {

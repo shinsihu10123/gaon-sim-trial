@@ -1,7 +1,7 @@
 use simulation_model::{
     EntityRegistry, HumanGroupBehaviorProfile, HumanGroupId, HumanGroupInitialState,
-    HumanGroupRegistry, InitialKnowledgeProfile, RegionId, RegionSurface, ResourceFieldState,
-    TerrainEffectField, TerrainState, WorldSpatialState,
+    HumanGroupRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile, RegionId, RegionSurface,
+    ResourceFieldState, TerrainEffectField, TerrainState, WorldSpatialState,
 };
 
 const HABITAT_SALT: u64 = 0x4841_4249_5441_5401;
@@ -34,6 +34,7 @@ pub struct InitialHumanGroupConfig {
     pub mobility_permille: PermilleRange,
     pub exploration_permille: PermilleRange,
     pub settlement_bias_permille: PermilleRange,
+    pub runtime_seed: HumanGroupRuntimeSeed,
     pub contact_radius_m: u32,
     pub knowledge_profile: InitialKnowledgeProfile,
 }
@@ -56,6 +57,7 @@ impl InitialHumanGroupConfig {
             || !self.mobility_permille.is_valid()
             || !self.exploration_permille.is_valid()
             || !self.settlement_bias_permille.is_valid()
+            || !self.runtime_seed.is_valid()
             || self.contact_radius_m == 0
             || !self.knowledge_profile.is_valid()
         {
@@ -290,7 +292,7 @@ fn build_registry(
         let ordinal_u64 = u64::try_from(ordinal).unwrap_or(u64::MAX);
         let initial = build_initial_state(seed, config, *candidate, population, ordinal_u64)?;
         registry
-            .create_initialized(initial)
+            .create_initialized_with_runtime(initial, config.runtime_seed)
             .map_err(|_| HumanGroupGenerationError::RegistryFailure)?;
     }
     Ok(registry)

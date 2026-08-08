@@ -6,7 +6,7 @@ use simulation_model::{
     WorldState,
 };
 
-pub const RENDER_SNAPSHOT_VERSION: u32 = 6;
+pub const RENDER_SNAPSHOT_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,23 +126,19 @@ impl RenderWorldSnapshot {
                 .human_groups
                 .iter()
                 .filter_map(|group| {
-                    group
-                        .initial
-                        .as_ref()
-                        .map(|initial| RenderHumanGroupSnapshot {
-                            id: group.id.0.to_string(),
-                            region_id: initial.region_id.0.to_string(),
-                            x_m: initial.x_m,
-                            z_m: initial.z_m,
-                            population: initial.population.to_string(),
-                            food_stock_person_days: initial.food_stock_person_days.to_string(),
-                            basic_resource_stock_units: initial
-                                .basic_resource_stock_units
-                                .to_string(),
-                            mobility_permille: initial.behavior.mobility_permille,
-                            exploration_permille: initial.behavior.exploration_permille,
-                            settlement_bias_permille: initial.behavior.settlement_bias_permille,
-                        })
+                    group.state.as_ref().map(|state| RenderHumanGroupSnapshot {
+                        id: group.id.0.to_string(),
+                        region_id: state.region_id.0.to_string(),
+                        x_m: state.x_m,
+                        z_m: state.z_m,
+                        population: state.population.to_string(),
+                        food_stock_person_days: state.food_stock_person_days.to_string(),
+                        basic_resource_stock_units: state.basic_resource_stock_units.to_string(),
+                        mobility_permille: state.mobility_permille,
+                        nutrition_permille: state.nutrition_permille,
+                        cohesion_permille: state.cohesion_permille,
+                        risk_permille: state.risk_permille,
+                    })
                 })
                 .collect(),
             settlements: world
@@ -216,8 +212,9 @@ pub struct RenderHumanGroupSnapshot {
     pub food_stock_person_days: String,
     pub basic_resource_stock_units: String,
     pub mobility_permille: u16,
-    pub exploration_permille: u16,
-    pub settlement_bias_permille: u16,
+    pub nutrition_permille: u16,
+    pub cohesion_permille: u16,
+    pub risk_permille: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
