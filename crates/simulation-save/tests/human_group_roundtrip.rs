@@ -1,6 +1,6 @@
 use simulation_model::{
-    derive_terrain_effects, EntityRegistry, InitialKnowledgeProfile, MapPoint, RegionId,
-    RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
+    derive_terrain_effects, EntityRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile, MapPoint,
+    RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
 };
 use simulation_save::{
     create_bundle, decode_bundle, EngineSnapshot, SaveKind, SAVE_FORMAT_VERSION,
@@ -10,11 +10,17 @@ use simulation_worldgen::{
     InitialHumanGroupConfig, PermilleRange,
 };
 
+const BASE_RUNTIME_SEED: HumanGroupRuntimeSeed = HumanGroupRuntimeSeed {
+    nutrition_permille: 1_000,
+    cohesion_permille: 500,
+    risk_permille: 500,
+};
+
 #[test]
-fn initialized_human_groups_round_trip_exactly_in_save_v6() {
-    let snapshot = snapshot_with_human_groups(2026, 4, 16_000);
+fn authoritative_human_groups_round_trip_exactly_in_save_v7() {
+    let snapshot = snapshot_with_human_groups(2026, 4, 16_000, BASE_RUNTIME_SEED);
     let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("HumanGroup world saves");
-    assert_eq!(SAVE_FORMAT_VERSION, 6);
+    assert_eq!(SAVE_FORMAT_VERSION, 7);
 
     let (_, restored) = decode_bundle(&bundle).expect("HumanGroup world restores");
     assert_eq!(restored, snapshot);
@@ -25,13 +31,24 @@ fn initialized_human_groups_round_trip_exactly_in_save_v6() {
         .entities
         .human_groups
         .iter()
-        .all(|group| group.initial.is_some()));
+        .all(|group| group.initial.is_some() && group.state.is_some()));
+    for (original, decoded) in snapshot
+        .world
+        .entities
+        .human_groups
+        .iter()
+        .zip(restored.world.entities.human_groups.iter())
+    {
+        assert_eq!(decoded.id, original.id);
+        assert_eq!(decoded.initial, original.initial);
+        assert_eq!(decoded.state, original.state);
+    }
 }
 
 #[test]
 fn initial_human_group_state_changes_canonical_binary() {
-    let first = snapshot_with_human_groups(2026, 4, 16_000);
-    let second = snapshot_with_human_groups(2026, 4, 16_001);
+    let first = snapshot_with_human_groups(2026, 4, 16_000, BASE_RUNTIME_SEED);
+    let second = snapshot_with_human_groups(2026, 4, 16_001, BASE_RUNTIME_SEED);
 
     let first_bundle = create_bundle(&first, SaveKind::Manual).expect("first saves");
     let second_bundle = create_bundle(&second, SaveKind::Manual).expect("second saves");
@@ -49,7 +66,43 @@ fn initial_human_group_state_changes_canonical_binary() {
     );
 }
 
-fn snapshot_with_human_groups(seed: u64, group_count: usize, population: u64) -> EngineSnapshot {
+#[test]
+fn authoritative_runtime_state_changes_canonical_binary() {
+    let first = snapshot_with_human_groups(2026, 4, 16_000, BASE_RUNTIME_SEED);
+    let second = snapshot_with_human_groups(
+        2026,
+        4,
+        16_000,
+        HumanGroupRuntimeSeed {
+            nutrition_permille: 1_000,
+            cohesion_permille: 500,
+            risk_permille: 501,
+        },
+    );
+
+    let first_bundle = create_bundle(&first, SaveKind::Manual).expect("first runtime saves");
+    let second_bundle = create_bundle(&second, SaveKind::Manual).expect("second runtime saves");
+
+    assert_ne!(first.world, second.world);
+    assert_ne!(first_bundle.state_binary, second_bundle.state_binary);
+    assert_ne!(
+        first_bundle
+            .metadata()
+            .expect("first metadata")
+            .state_checksum_fnv1a64,
+        second_bundle
+            .metadata()
+            .expect("second metadata")
+            .state_checksum_fnv1a64
+    );
+}
+
+fn snapshot_with_human_groups(
+    seed: u64,
+    group_count: usize,
+    population: u64,
+    runtime_seed: HumanGroupRuntimeSeed,
+) -> EngineSnapshot {
     let terrain = generate_trial_terrain(seed).expect("terrain");
     let resources = generate_trial_resources(seed, &terrain).expect("resources");
     let effects = derive_terrain_effects(&terrain);
@@ -64,6 +117,7 @@ fn snapshot_with_human_groups(seed: u64, group_count: usize, population: u64) ->
         mobility_permille: PermilleRange { min: 100, max: 500 },
         exploration_permille: PermilleRange { min: 150, max: 650 },
         settlement_bias_permille: PermilleRange { min: 200, max: 700 },
+        runtime_seed,
         contact_radius_m: 300_000,
         knowledge_profile: InitialKnowledgeProfile::default(),
     };
