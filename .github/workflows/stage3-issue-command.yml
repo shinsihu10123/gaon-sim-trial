@@ -1,0 +1,45 @@
+name: Stage 3 Temporary PR Command
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: github.event.issue.pull_request && github.event.comment.body == '/apply-stage3-authoritative-state'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tooling from develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          path: tooling
+      - name: Checkout Stage 3 feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/stage-3-1-authoritative-human-group-state
+          path: work
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Apply Stage 3 authoritative state patch
+        run: |
+          python tooling/scripts/stage3_authoritative_state_patch.py work
+          cd work
+          cargo fmt --all
+      - name: Commit and push
+        run: |
+          cd work
+          if git diff --quiet; then
+            echo "No patch required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates viewer/src
+          git commit -m "feat: persist authoritative HumanGroup runtime state"
+          git push origin HEAD:feature/stage-3-1-authoritative-human-group-state
