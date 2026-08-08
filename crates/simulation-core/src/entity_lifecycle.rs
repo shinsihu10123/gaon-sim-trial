@@ -14,6 +14,59 @@ impl SimulationEngine {
     ) -> Result<Option<EventPayload>, EntityRegistryError> {
         match payload {
             CommandPayload::NoOp { .. } => Ok(None),
+            CommandPayload::CreateHumanGroupEntity => {
+                let id = self.state.entities.human_groups.create()?;
+                Ok(Some(EventPayload::EntityCreated {
+                    entity: EntityRef::human_group(id),
+                }))
+            }
+            CommandPayload::RemoveHumanGroupEntity { human_group_id } => {
+                self.state.entities.human_groups.remove(*human_group_id)?;
+                Ok(Some(EventPayload::EntityRemoved {
+                    entity: EntityRef::human_group(*human_group_id),
+                }))
+            }
+            CommandPayload::CreateSettlementEntity => {
+                let id = self.state.entities.settlements.create()?;
+                Ok(Some(EventPayload::EntityCreated {
+                    entity: EntityRef::settlement(id),
+                }))
+            }
+            CommandPayload::RemoveSettlementEntity { settlement_id } => {
+                self.state.entities.settlements.remove(*settlement_id)?;
+                Ok(Some(EventPayload::EntityRemoved {
+                    entity: EntityRef::settlement(*settlement_id),
+                }))
+            }
+            CommandPayload::CreateCommunityEntity => {
+                let id = self.state.entities.communities.create()?;
+                Ok(Some(EventPayload::EntityCreated {
+                    entity: EntityRef::community(id),
+                }))
+            }
+            CommandPayload::RemoveCommunityEntity { community_id } => {
+                self.state.entities.communities.remove(*community_id)?;
+                Ok(Some(EventPayload::EntityRemoved {
+                    entity: EntityRef::community(*community_id),
+                }))
+            }
+            CommandPayload::CreatePoliticalEntity => {
+                let id = self.state.entities.political_entities.create()?;
+                Ok(Some(EventPayload::EntityCreated {
+                    entity: EntityRef::political_entity(id),
+                }))
+            }
+            CommandPayload::RemovePoliticalEntity {
+                political_entity_id,
+            } => {
+                self.state
+                    .entities
+                    .political_entities
+                    .remove(*political_entity_id)?;
+                Ok(Some(EventPayload::EntityRemoved {
+                    entity: EntityRef::political_entity(*political_entity_id),
+                }))
+            }
             CommandPayload::CreateCountryEntity => {
                 let id = self.state.entities.countries.create()?;
                 Ok(Some(EventPayload::EntityCreated {
