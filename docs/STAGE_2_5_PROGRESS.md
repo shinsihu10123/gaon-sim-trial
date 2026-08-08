@@ -1,49 +1,49 @@
 # Stage 2.5 Dynamic Entity Architecture — Civilization-Origin Generalization
 
-Status: **IN PROGRESS — FINAL VALIDATION**
+Status: **PASS**
 
 Authoritative scope: WBS v3.1 civilization-origin revision.
 
-## WBS v3.1 scope
+## WBS v3.1 completion
 
-- 2.5.1 Stable Entity ID rules
-- 2.5.2 common Entity Registry interface
-- 2.5.3 Region Registry dynamicization
-- 2.5.4 HumanGroup Registry
-- 2.5.5 Settlement / Community Registry
-- 2.5.6 PoliticalEntity / Country Registry
-- 2.5.7 Entity Create / Remove lifecycle
-- 2.5.8 Lookup / Iteration / Reference Integrity
-- 2.5.9 deterministic creation order and ID issuance
-- 2.5.10 dynamic Entity Save / Load
-- 2.5.11 dynamic Entity canonical hash / replay
-- 2.5.12 lifecycle / transition Event Ledger facts
+- ■ 2.5.1 Stable Entity ID rules
+- ■ 2.5.2 common Entity Registry interface
+- ■ 2.5.3 Region Registry dynamicization
+- ■ 2.5.4 HumanGroup Registry
+- ■ 2.5.5 Settlement / Community Registry
+- ■ 2.5.6 PoliticalEntity / Country Registry
+- ■ 2.5.7 Entity Create / Remove lifecycle
+- ■ 2.5.8 Lookup / Iteration / Reference Integrity
+- ■ 2.5.9 deterministic creation order and ID issuance
+- ■ 2.5.10 dynamic Entity Save / Load
+- ■ 2.5.11 dynamic Entity canonical hash / replay
+- ■ 2.5.12 lifecycle / transition Event Ledger facts
 
-## Architecture rules
+## Architecture rules fixed by Stage 2.5
 
 - Year 1 may legitimately contain zero countries.
 - Country is not an initial-world invariant; it is a later political entity type.
-- stable typed u64 entity IDs; zero is invalid
-- IDs are monotonic and never recycled after removal
-- deterministic BTreeMap-backed registries
-- System Commands own authoritative lifecycle mutations
-- registry allocator state is part of canonical persistence
-- command-journal replay must reproduce allocator and entity state
-- JS RenderSnapshot boundary uses decimal-string IDs to avoid IEEE-754 precision loss
+- Stable typed u64 entity IDs are non-zero, monotonic and never recycled.
+- Dynamic registries use deterministic BTreeMap ordering.
+- WorldState authoritatively owns HumanGroup, Settlement, Community, PoliticalEntity, Country, City and Region registries.
+- System Commands own authoritative lifecycle mutations.
+- `PromotePoliticalEntityToCountry` supplies the transition mechanism without embedding the historical cause of state emergence in Stage 2.5.
+- Registry allocator state is part of canonical persistence.
+- Command Journal replay reproduces entity state, transition events and allocator state.
+- RenderSnapshot uses decimal-string entity IDs at the JavaScript boundary to avoid IEEE-754 precision loss.
 
 ## Implemented foundation
 
 - Region count is dynamic; 60 is Benchmark S only.
-- sparse Region IDs survive removal without renumbering.
-- HumanGroup / Settlement / Community / PoliticalEntity / Country / City typed registries exist.
+- Sparse Region IDs survive removal without renumbering.
+- HumanGroup / Settlement / Community / PoliticalEntity / Country / City typed registries are implemented.
 - Region Registry is dynamic and preserves stable IDs.
 - System lifecycle commands create and remove pre-state entities.
-- `PromotePoliticalEntityToCountry` provides a deterministic transition mechanism without predefining the historical cause of state emergence.
 - Country / City / Region reference-integrity checks remain in the common lifecycle layer.
 - Save format v5 serializes all current dynamic registries and allocator cursors.
-- command binary codec includes all pre-state lifecycle commands and political-entity promotion.
+- Command binary codec includes all pre-state lifecycle commands and PoliticalEntity -> Country promotion.
 - Event Ledger records create, remove, rejected mutation and political transition facts.
-- RenderSnapshot crosses the JS boundary with decimal-string IDs where entity identifiers are exposed.
+- Permanent `check-dynamic-entity-contract.mjs` is chained into Viewer CI.
 
 ## Acceptance coverage
 
@@ -52,12 +52,46 @@ Authoritative scope: WBS v3.1 civilization-origin revision.
 - lifecycle payloads require System source
 - referenced entities are protected from invalid removal
 - all pre-state registry allocators survive Save / Load
-- PoliticalEntity can transition to Country without embedding emergence criteria in Stage 2.5
+- PoliticalEntity can transition to Country without predefining emergence criteria
 - civilization-origin lifecycle Command Journal replay matches authoritative digest
 - sparse Region identity and allocator survive Save / Load
 
-## Current gate
+## Functional evidence head
 
-The pre-v3.1 Stage 2.5 Core gate was restored to PASS before civilization-origin expansion. The generalized v3.1 implementation is now in permanent Core / Viewer CI revalidation with a dedicated Stage 2.5 source contract.
+Commit: `accee48a670990deedbec8f6d675e9e9cea105a3`
 
-No Stage 2.5 item is marked complete until the final civilization-origin head passes permanent Core and Viewer CI and evidence is recorded.
+Permanent CI on that cleaned feature head:
+
+- Core run `31233701411`: PASS
+  - rustfmt PASS
+  - strict Clippy PASS
+  - complete Rust workspace tests PASS
+  - headless save/load/replay PASS
+  - Stage 1 command contract PASS
+- Viewer run `31233701400`: PASS
+  - locked Rust workspace PASS
+  - actual WASM build PASS
+  - npm dependency installation PASS
+  - TypeScript typecheck PASS
+  - Vite production build PASS
+  - Stage 1.1 / 2.1 / 2.2 / 2.3 / 2.4 / 2.5 source contract chain PASS
+
+Rust test total on the functional evidence head: **101 passed / 0 failed**.
+
+Headless evidence:
+
+- date: `0002-01-01`
+- elapsed days: `365`
+- terrain samples: `16641`
+- land samples: `7371`
+- river samples: `2145`
+- drainage basins: `409`
+- islands: `1`
+- save state bytes: `1165241`
+- canonical digest: `c796422d1225847e`
+
+## Final completion rule
+
+This PASS document is itself committed after the cleaned functional head passed both permanent gates. The documentation/evidence commit must also pass the same permanent Core and Viewer CI before PR #13 is merged into `develop`.
+
+Stage 2.6 is not started by this document.
