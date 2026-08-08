@@ -1,6 +1,6 @@
 # Stage 2.5 Dynamic Entity Architecture — Civilization-Origin Generalization
 
-Status: **IN PROGRESS**
+Status: **IN PROGRESS — FINAL VALIDATION**
 
 Authoritative scope: WBS v3.1 civilization-origin revision.
 
@@ -31,29 +31,33 @@ Authoritative scope: WBS v3.1 civilization-origin revision.
 - command-journal replay must reproduce allocator and entity state
 - JS RenderSnapshot boundary uses decimal-string IDs to avoid IEEE-754 precision loss
 
-## Existing validated foundation retained
+## Implemented foundation
 
 - Region count is dynamic; 60 is Benchmark S only.
 - sparse Region IDs survive removal without renumbering.
-- Country / Region / City registry groundwork exists.
-- Region reciprocal adjacency maintenance exists.
-- Country / City reference-integrity checks exist.
-- Save format v5 is the unmerged Stage 2.5 schema and can still be extended before PASS.
-- Entity lifecycle facts use the Event Ledger.
+- HumanGroup / Settlement / Community / PoliticalEntity / Country / City typed registries exist.
+- Region Registry is dynamic and preserves stable IDs.
+- System lifecycle commands create and remove pre-state entities.
+- `PromotePoliticalEntityToCountry` provides a deterministic transition mechanism without predefining the historical cause of state emergence.
+- Country / City / Region reference-integrity checks remain in the common lifecycle layer.
+- Save format v5 serializes all current dynamic registries and allocator cursors.
+- command binary codec includes all pre-state lifecycle commands and political-entity promotion.
+- Event Ledger records create, remove, rejected mutation and political transition facts.
+- RenderSnapshot crosses the JS boundary with decimal-string IDs where entity identifiers are exposed.
 
-## Civilization-origin generalization in progress
+## Acceptance coverage
 
-- HumanGroup typed ID and registry
-- Settlement typed ID and registry
-- Community typed ID and registry
-- PoliticalEntity typed ID and registry
-- authoritative WorldState ownership of all pre-state registries
-- System lifecycle commands for each pre-state entity type
-- binary persistence and command-journal codec extension
-- acceptance tests for zero-country initial state, non-reused IDs, save/load and replay
+- zero-country world can contain HumanGroup, Settlement, Community and PoliticalEntity entities
+- monotonic IDs are not recycled after removal
+- lifecycle payloads require System source
+- referenced entities are protected from invalid removal
+- all pre-state registry allocators survive Save / Load
+- PoliticalEntity can transition to Country without embedding emergence criteria in Stage 2.5
+- civilization-origin lifecycle Command Journal replay matches authoritative digest
+- sparse Region identity and allocator survive Save / Load
 
 ## Current gate
 
-The pre-v3.1 Stage 2.5 Core gate was restored to PASS before civilization-origin expansion. The branch is now intentionally open again while the new v3.1 entity set is integrated and revalidated.
+The pre-v3.1 Stage 2.5 Core gate was restored to PASS before civilization-origin expansion. The generalized v3.1 implementation is now in permanent Core / Viewer CI revalidation with a dedicated Stage 2.5 source contract.
 
 No Stage 2.5 item is marked complete until the final civilization-origin head passes permanent Core and Viewer CI and evidence is recorded.
