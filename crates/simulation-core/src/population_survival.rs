@@ -95,12 +95,12 @@ pub(crate) fn advance_population_survival(world: &mut WorldState) -> PopulationS
                 state.terrain_sample_index,
             )
         });
-        let capacity_birth_factor = carrying_capacity
-            .map(|capacity| capacity_birth_factor_permille(region_population, capacity))
-            .unwrap_or(1_000);
-        let capacity_death_rate = carrying_capacity
-            .map(|capacity| capacity_death_rate_per_thousand(region_population, capacity))
-            .unwrap_or(0);
+        let capacity_birth_factor = carrying_capacity.map_or(1_000, |capacity| {
+            capacity_birth_factor_permille(region_population, capacity)
+        });
+        let capacity_death_rate = carrying_capacity.map_or(0, |capacity| {
+            capacity_death_rate_per_thousand(region_population, capacity)
+        });
         if capacity_death_rate > 0 {
             report.overloaded_groups = report.overloaded_groups.saturating_add(1);
         }
