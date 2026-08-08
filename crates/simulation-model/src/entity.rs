@@ -109,6 +109,100 @@ impl HumanGroupInitialState {
     }
 }
 
+/// Stable hook for the later `KnowledgeState` system. Stage 3.1 defines the
+/// reference boundary without introducing a fixed technology tree or a
+/// Knowledge registry ahead of Stage 4.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KnowledgeStateRef(pub u64);
+
+impl KnowledgeStateRef {
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.0 != 0
+    }
+}
+
+/// Stable hook for later agent/group memory storage. The referenced memory
+/// model is intentionally deferred; only the authoritative reference contract
+/// is fixed at Stage 3.1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MemoryStateRef(pub u64);
+
+impl MemoryStateRef {
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.0 != 0
+    }
+}
+
+/// Canonical `HumanGroup` ancestry used by future split/merge operations.
+/// `merged_from` must be strictly ID-sorted and duplicate-free so hashing and
+/// replay remain deterministic.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct HumanGroupLineage {
+    pub parent: Option<HumanGroupId>,
+    pub split_from: Option<HumanGroupId>,
+    pub merged_from: Vec<HumanGroupId>,
+}
+
+impl HumanGroupLineage {
+    #[must_use]
+    pub fn is_valid_for(&self, id: HumanGroupId) -> bool {
+        let direct_refs_valid = self
+            .parent
+            .map_or(true, |parent| parent.0 != 0 && parent != id)
+            && self
+                .split_from
+                .map_or(true, |source| source.0 != 0 && source != id);
+        let merged_refs_valid = self
+            .merged_from
+            .iter()
+            .all(|source| source.0 != 0 && *source != id)
+            && self.merged_from.windows(2).all(|pair| pair[0] < pair[1]);
+        direct_refs_valid && merged_refs_valid
+    }
+}
+
+/// Stage 3 authoritative `HumanGroup` runtime-state schema.
+///
+/// This type deliberately contains only primitive survival-era state and
+/// references to later Knowledge/Memory systems. Settlement, political and
+/// country state are not embedded here because those entities emerge later.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HumanGroupState {
+    pub id: HumanGroupId,
+    pub region_id: RegionId,
+    pub x_m: i32,
+    pub z_m: i32,
+    pub terrain_sample_index: u32,
+    pub population: u64,
+    pub mobility_permille: u16,
+    pub food_stock_person_days: u64,
+    pub basic_resource_stock_units: u64,
+    pub nutrition_permille: u16,
+    pub cohesion_permille: u16,
+    pub risk_permille: u16,
+    pub knowledge_ref: Option<KnowledgeStateRef>,
+    pub memory_ref: Option<MemoryStateRef>,
+    pub lineage: HumanGroupLineage,
+}
+
+impl HumanGroupState {
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.id.0 != 0
+            && self.region_id.0 != 0
+            && self.population != 0
+            && self.mobility_permille <= 1_000
+            && self.nutrition_permille <= 1_000
+            && self.cohesion_permille <= 1_000
+            && self.risk_permille <= 1_000
+            && self.knowledge_ref.map_or(true, KnowledgeStateRef::is_valid)
+            && self.memory_ref.map_or(true, MemoryStateRef::is_valid)
+            && self.lineage.is_valid_for(self.id)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EntityKind {
     Country,
@@ -602,8 +696,9 @@ fn validate_next_id(
 #[cfg(test)]
 mod tests {
     use super::{
-        CityRegistry, CountryRegistry, EntityRegistry, EntityRegistryError, HumanGroupRegistry,
-        PoliticalEntityRegistry, SettlementRegistry, StableEntityId,
+        CityRegistry, CountryRegistry, EntityRegistry, EntityRegistryError, HumanGroupId,
+        HumanGroupLineage, HumanGroupRegistry, HumanGroupState, KnowledgeStateRef, MemoryStateRef,
+        PoliticalEntityRegistry, RegionId, SettlementRegistry, StableEntityId,
     };
 
     #[test]
@@ -676,5 +771,66 @@ mod tests {
         let record = registry.get(city).expect("city exists");
         assert_eq!(record.country, Some(super::CountryId(4)));
         assert_eq!(record.region, Some(super::RegionId(9)));
+    }
+
+    #[test]
+    fn human_group_state_validates_stage_3_1_ranges_and_lineage() {
+        let state = HumanGroupState {
+            id: HumanGroupId(9),
+            region_id: RegionId(3),
+            x_m: 10,
+            z_m: -20,
+            terrain_sample_index: 7,
+            population: 120,
+            mobility_permille: 450,
+            food_stock_person_days: 3_600,
+            basic_resource_stock_units: 900,
+            nutrition_permille: 800,
+            cohesion_permille: 650,
+            risk_permille: 250,
+            knowledge_ref: Some(KnowledgeStateRef(2)),
+            memory_ref: Some(MemoryStateRef(4)),
+            lineage: HumanGroupLineage {
+                parent: Some(HumanGroupId(1)),
+                split_from: Some(HumanGroupId(2)),
+                merged_from: vec![HumanGroupId(5), HumanGroupId(7)],
+            },
+        };
+        assert!(state.is_valid());
+    }
+
+    #[test]
+    fn human_group_state_rejects_noncanonical_or_self_lineage() {
+        let mut lineage = HumanGroupLineage {
+            parent: None,
+            split_from: None,
+            merged_from: vec![HumanGroupId(7), HumanGroupId(5)],
+        };
+        assert!(!lineage.is_valid_for(HumanGroupId(9)));
+
+        lineage.merged_from = vec![HumanGroupId(5), HumanGroupId(9)];
+        assert!(!lineage.is_valid_for(HumanGroupId(9)));
+    }
+
+    #[test]
+    fn human_group_state_rejects_out_of_range_survival_indicators() {
+        let state = HumanGroupState {
+            id: HumanGroupId(1),
+            region_id: RegionId(1),
+            x_m: 0,
+            z_m: 0,
+            terrain_sample_index: 0,
+            population: 1,
+            mobility_permille: 1_001,
+            food_stock_person_days: 0,
+            basic_resource_stock_units: 0,
+            nutrition_permille: 1_000,
+            cohesion_permille: 1_000,
+            risk_permille: 0,
+            knowledge_ref: None,
+            memory_ref: None,
+            lineage: HumanGroupLineage::default(),
+        };
+        assert!(!state.is_valid());
     }
 }
