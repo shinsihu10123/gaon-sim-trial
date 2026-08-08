@@ -271,11 +271,7 @@ macro_rules! identity_registry {
 identity_registry!(HumanGroupId, HumanGroupEntity, HumanGroupRegistry);
 identity_registry!(SettlementId, SettlementEntity, SettlementRegistry);
 identity_registry!(CommunityId, CommunityEntity, CommunityRegistry);
-identity_registry!(
-    PoliticalEntityId,
-    PoliticalEntity,
-    PoliticalEntityRegistry
-);
+identity_registry!(PoliticalEntityId, PoliticalEntity, PoliticalEntityRegistry);
 identity_registry!(CountryId, CountryEntity, CountryRegistry);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
