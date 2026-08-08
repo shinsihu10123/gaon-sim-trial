@@ -22,7 +22,7 @@ jobs:
           python3 scripts/migrate-stage2-5-civilization.py
           python3 scripts/migrate-stage2-5-transition.py
           cargo fmt --all
-      - name: Commit migration
+      - name: Commit migration and formatting
         run: |
           if git diff --quiet; then
             echo "No migration changes"
@@ -30,6 +30,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/simulation-save/src/binary.rs crates/simulation-model/src/event.rs crates/simulation-model/src/lib.rs crates/simulation-core/src/entity_lifecycle.rs
-          git commit -m "Add civilization-origin political transition"
+          git add crates/simulation-save/src/binary.rs crates/simulation-model/src/event.rs crates/simulation-model/src/lib.rs crates/simulation-model/src/entity.rs crates/simulation-core/src/entity_lifecycle.rs crates/simulation-core/tests/dynamic_entity.rs
+          git commit -m "Finalize civilization-origin entity formatting"
           git push origin HEAD:feature/stage-2-5-dynamic-entity
