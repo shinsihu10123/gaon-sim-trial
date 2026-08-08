@@ -43,6 +43,9 @@ impl SimulationWasm {
     }
 
     /// Serializes a complete renderer-facing snapshot, including immutable terrain.
+    ///
+    /// # Errors
+    /// Returns a JavaScript error when the authoritative digest or JSON encoding fails.
     #[wasm_bindgen(js_name = snapshotJson)]
     pub fn snapshot_json(&self) -> Result<String, JsValue> {
         self.encode_snapshot(true)
@@ -50,6 +53,9 @@ impl SimulationWasm {
 
     /// Advances the authoritative engine and returns a dynamic frame. Immutable
     /// terrain is omitted after initialization and retained by the Viewer bridge.
+    ///
+    /// # Errors
+    /// Returns a JavaScript error when the authoritative digest or JSON encoding fails.
     #[wasm_bindgen(js_name = advanceDays)]
     pub fn advance_days(&mut self, days: u32) -> Result<String, JsValue> {
         self.engine.advance_days(u64::from(days));
@@ -97,7 +103,6 @@ fn parse_seed_hex(seed_hex: &str) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use simulation_core::SimulationEngine;
-    use simulation_model::EntityRegistry;
     use simulation_save::{create_bundle, SaveKind};
     use simulation_worldgen::{
         generate_trial_civilization_origin_world, trial_preview_human_group_config,
@@ -124,8 +129,8 @@ mod tests {
         let restored = SimulationEngine::from_save_bundle(&bundle).expect("engine restores");
         assert!(restored.state().terrain.is_some());
         assert!(restored.state().resources.is_some());
-        assert_eq!(restored.state().spatial.regions.len(), 60);
-        assert_eq!(restored.state().entities.human_groups.len(), 8);
+        assert_eq!(restored.state().spatial.regions.iter().count(), 60);
+        assert_eq!(restored.state().entities.human_groups.iter().count(), 8);
         assert_eq!(restored.state().seed, seed);
     }
 }
