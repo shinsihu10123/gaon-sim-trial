@@ -34,7 +34,7 @@ for (const fragment of [
   "pub exploration_permille: u16",
   "pub settlement_bias_permille: u16",
   "pub struct InitialKnowledgeProfile",
-  "pub fn create_initialized",
+  "pub fn create_initialized_with_runtime",
 ]) {
   if (!modelEntity.includes(fragment)) {
     throw new Error(`Stage 2.6/3.1 model contract missing: ${fragment}`);
@@ -151,15 +151,25 @@ for (const fragment of [
   }
 }
 for (const fragment of [
-  "initialized_human_groups_round_trip_exactly_in_save_v6",
+  "authoritative_human_groups_round_trip_exactly_in_save_v7",
   "initial_human_group_state_changes_canonical_binary",
+  "authoritative_runtime_state_changes_canonical_binary",
+  "group.initial.is_some() && group.state.is_some()",
 ]) {
   if (!saveTests.includes(fragment)) {
-    throw new Error(`Stage 2.6 save acceptance missing: ${fragment}`);
+    throw new Error(`Stage 3.1 save acceptance missing: ${fragment}`);
   }
 }
-if (!protocolTests.includes("zero_country_world_exposes_initialized_human_group_snapshot")) {
-  throw new Error("Stage 2.6 RenderSnapshot acceptance missing");
+for (const fragment of [
+  "zero_country_world_exposes_authoritative_human_group_snapshot",
+  "create_initialized_with_runtime",
+  "group.nutrition_permille",
+  "group.cohesion_permille",
+  "group.risk_permille",
+]) {
+  if (!protocolTests.includes(fragment)) {
+    throw new Error(`Stage 3.1 RenderSnapshot acceptance missing: ${fragment}`);
+  }
 }
 
 console.log(
