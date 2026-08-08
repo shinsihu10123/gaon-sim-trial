@@ -15,9 +15,10 @@ for (const fragment of [
   "pub struct RegionState",
   "pub legal_owner: Option<CountryId>",
   "pub controller: Option<CountryId>",
+  "pub struct RegionRegistry",
+  "BTreeMap<RegionId, RegionState>",
   "pub struct WorldSpatialState",
   "pub fn new(bounds: WorldBounds, regions: Vec<RegionState>)",
-  "binary_search_by_key",
   "AsymmetricAdjacency",
 ]) {
   if (!model.includes(fragment)) {
@@ -62,8 +63,10 @@ for (const fragment of [
   "regions: world",
   ".regions",
   ".iter()",
-  "legal_owner: Option<u16>",
-  "controller: Option<u16>",
+  "pub id: String",
+  "pub neighbors: Vec<String>",
+  "pub legal_owner: Option<String>",
+  "pub controller: Option<String>",
 ]) {
   if (!protocol.includes(fragment)) {
     throw new Error(`render protocol contract missing: ${fragment}`);
