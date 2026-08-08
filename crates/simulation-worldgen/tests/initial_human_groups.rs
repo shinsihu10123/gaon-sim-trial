@@ -12,15 +12,9 @@ fn group_count_is_parameterized_and_total_population_is_exact() {
     for group_count in [3_usize, 5] {
         let (terrain, resources, effects, spatial) = fixture_world(2026, 8);
         let config = config(group_count, 12_345);
-        let groups = generate_initial_human_groups(
-            2026,
-            &config,
-            &spatial,
-            &terrain,
-            &resources,
-            &effects,
-        )
-        .expect("groups generate");
+        let groups =
+            generate_initial_human_groups(2026, &config, &spatial, &terrain, &resources, &effects)
+                .expect("groups generate");
 
         assert_eq!(groups.len(), group_count);
         assert_eq!(
@@ -37,15 +31,9 @@ fn group_count_is_parameterized_and_total_population_is_exact() {
 fn groups_use_distinct_habitable_regions_and_valid_initial_stocks() {
     let (terrain, resources, effects, spatial) = fixture_world(2026, 8);
     let config = config(5, 20_000);
-    let groups = generate_initial_human_groups(
-        2026,
-        &config,
-        &spatial,
-        &terrain,
-        &resources,
-        &effects,
-    )
-    .expect("groups generate");
+    let groups =
+        generate_initial_human_groups(2026, &config, &spatial, &terrain, &resources, &effects)
+            .expect("groups generate");
 
     let mut regions = groups
         .iter()
@@ -71,33 +59,15 @@ fn groups_use_distinct_habitable_regions_and_valid_initial_stocks() {
 fn same_seed_reproduces_groups_while_other_seed_changes_initialization() {
     let (terrain, resources, effects, spatial) = fixture_world(2026, 8);
     let config = config(5, 18_000);
-    let first = generate_initial_human_groups(
-        2026,
-        &config,
-        &spatial,
-        &terrain,
-        &resources,
-        &effects,
-    )
-    .expect("first generation");
-    let second = generate_initial_human_groups(
-        2026,
-        &config,
-        &spatial,
-        &terrain,
-        &resources,
-        &effects,
-    )
-    .expect("second generation");
-    let changed = generate_initial_human_groups(
-        2027,
-        &config,
-        &spatial,
-        &terrain,
-        &resources,
-        &effects,
-    )
-    .expect("changed seed generation");
+    let first =
+        generate_initial_human_groups(2026, &config, &spatial, &terrain, &resources, &effects)
+            .expect("first generation");
+    let second =
+        generate_initial_human_groups(2026, &config, &spatial, &terrain, &resources, &effects)
+            .expect("second generation");
+    let changed =
+        generate_initial_human_groups(2027, &config, &spatial, &terrain, &resources, &effects)
+            .expect("changed seed generation");
 
     assert_eq!(first, second);
     assert_ne!(first, changed);
@@ -107,15 +77,9 @@ fn same_seed_reproduces_groups_while_other_seed_changes_initialization() {
 fn contact_matrix_covers_every_pair_and_uses_distance_threshold() {
     let (terrain, resources, effects, spatial) = fixture_world(2026, 8);
     let config = config(5, 15_000);
-    let groups = generate_initial_human_groups(
-        2026,
-        &config,
-        &spatial,
-        &terrain,
-        &resources,
-        &effects,
-    )
-    .expect("groups generate");
+    let groups =
+        generate_initial_human_groups(2026, &config, &spatial, &terrain, &resources, &effects)
+            .expect("groups generate");
     let contacts = initial_group_contacts(&groups, config.contact_radius_m);
 
     assert_eq!(contacts.len(), 5 * 4 / 2);
@@ -165,10 +129,10 @@ fn fixture_world(
         }
         let x_index = index % usize::from(terrain.width);
         let z_index = index / usize::from(terrain.width);
-        let x_m = terrain.bounds.min_x_m
-            + i32::try_from(x_index).expect("x index") * terrain.spacing_m;
-        let z_m = terrain.bounds.min_z_m
-            + i32::try_from(z_index).expect("z index") * terrain.spacing_m;
+        let x_m =
+            terrain.bounds.min_x_m + i32::try_from(x_index).expect("x index") * terrain.spacing_m;
+        let z_m =
+            terrain.bounds.min_z_m + i32::try_from(z_index).expect("z index") * terrain.spacing_m;
         let id = RegionId(u64::try_from(regions.len() + 1).expect("Region ID"));
         regions.push(RegionState {
             id,

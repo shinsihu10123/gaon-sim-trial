@@ -46,6 +46,69 @@ typed_entity_id!(CountryId);
 typed_entity_id!(RegionId);
 typed_entity_id!(CityId);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct KnowledgeSeedValue {
+    pub domain_key: u32,
+    pub level_permille: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct InitialKnowledgeProfile {
+    pub entries: Vec<KnowledgeSeedValue>,
+}
+
+impl InitialKnowledgeProfile {
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.entries
+            .iter()
+            .all(|entry| entry.level_permille <= 1_000)
+            && self
+                .entries
+                .windows(2)
+                .all(|pair| pair[0].domain_key < pair[1].domain_key)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HumanGroupBehaviorProfile {
+    pub mobility_permille: u16,
+    pub exploration_permille: u16,
+    pub settlement_bias_permille: u16,
+}
+
+impl HumanGroupBehaviorProfile {
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.mobility_permille <= 1_000
+            && self.exploration_permille <= 1_000
+            && self.settlement_bias_permille <= 1_000
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HumanGroupInitialState {
+    pub region_id: RegionId,
+    pub x_m: i32,
+    pub z_m: i32,
+    pub terrain_sample_index: u32,
+    pub population: u64,
+    pub food_stock_person_days: u64,
+    pub basic_resource_stock_units: u64,
+    pub behavior: HumanGroupBehaviorProfile,
+    pub knowledge: InitialKnowledgeProfile,
+}
+
+impl HumanGroupInitialState {
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.region_id.0 != 0
+            && self.population != 0
+            && self.behavior.is_valid()
+            && self.knowledge.is_valid()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EntityKind {
     Country,
@@ -268,7 +331,126 @@ macro_rules! identity_registry {
     };
 }
 
-identity_registry!(HumanGroupId, HumanGroupEntity, HumanGroupRegistry);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HumanGroupEntity {
+    pub id: HumanGroupId,
+    pub initial: Option<HumanGroupInitialState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HumanGroupRegistry {
+    entries: BTreeMap<HumanGroupId, HumanGroupEntity>,
+    next_id: u64,
+}
+
+impl HumanGroupRegistry {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            next_id: StableEntityId::FIRST.0,
+        }
+    }
+
+    /// Restores a HumanGroup registry from canonical persisted parts.
+    ///
+    /// # Errors
+    /// Returns [`EntityRegistryError`] for invalid identity, allocator or seed-state data.
+    pub fn from_parts(
+        next_id: u64,
+        records: Vec<HumanGroupEntity>,
+    ) -> Result<Self, EntityRegistryError> {
+        let mut entries = BTreeMap::new();
+        for record in records {
+            if record.id.0 == 0
+                || record
+                    .initial
+                    .as_ref()
+                    .is_some_and(|initial| !initial.is_valid())
+            {
+                return Err(EntityRegistryError::InvalidReference);
+            }
+            if entries.insert(record.id, record).is_some() {
+                return Err(EntityRegistryError::DuplicateId);
+            }
+        }
+        validate_next_id(next_id, entries.keys().map(|id| id.0))?;
+        Ok(Self { entries, next_id })
+    }
+
+    /// Creates an uninitialized HumanGroup identity for generic lifecycle tests
+    /// and later runtime systems.
+    ///
+    /// # Errors
+    /// Returns [`EntityRegistryError::IdExhausted`] if ID space is exhausted.
+    pub fn create(&mut self) -> Result<HumanGroupId, EntityRegistryError> {
+        self.create_record(None)
+    }
+
+    /// Creates a Year-1 HumanGroup with its authoritative initial ecological state.
+    ///
+    /// # Errors
+    /// Returns [`EntityRegistryError`] if the seed state is invalid or ID space is exhausted.
+    pub fn create_initialized(
+        &mut self,
+        initial: HumanGroupInitialState,
+    ) -> Result<HumanGroupId, EntityRegistryError> {
+        if !initial.is_valid() {
+            return Err(EntityRegistryError::InvalidReference);
+        }
+        self.create_record(Some(initial))
+    }
+
+    fn create_record(
+        &mut self,
+        initial: Option<HumanGroupInitialState>,
+    ) -> Result<HumanGroupId, EntityRegistryError> {
+        let id = HumanGroupId(allocate_id(&mut self.next_id)?);
+        let previous = self.entries.insert(id, HumanGroupEntity { id, initial });
+        debug_assert!(previous.is_none());
+        Ok(id)
+    }
+
+    /// Removes an existing HumanGroup without recycling its stable ID.
+    ///
+    /// # Errors
+    /// Returns [`EntityRegistryError::UnknownEntity`] if absent.
+    pub fn remove(&mut self, id: HumanGroupId) -> Result<HumanGroupEntity, EntityRegistryError> {
+        self.entries
+            .remove(&id)
+            .ok_or(EntityRegistryError::UnknownEntity)
+    }
+
+    #[must_use]
+    pub const fn next_id(&self) -> u64 {
+        self.next_id
+    }
+}
+
+impl Default for HumanGroupRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EntityRegistry for HumanGroupRegistry {
+    type Id = HumanGroupId;
+    type Record = HumanGroupEntity;
+    type Iter<'a> = std::collections::btree_map::Values<'a, HumanGroupId, HumanGroupEntity>;
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn get(&self, id: Self::Id) -> Option<&Self::Record> {
+        self.entries.get(&id)
+    }
+
+    fn iter(&self) -> Self::Iter<'_> {
+        self.entries.values()
+    }
+}
+
 identity_registry!(SettlementId, SettlementEntity, SettlementRegistry);
 identity_registry!(CommunityId, CommunityEntity, CommunityRegistry);
 identity_registry!(PoliticalEntityId, PoliticalEntity, PoliticalEntityRegistry);

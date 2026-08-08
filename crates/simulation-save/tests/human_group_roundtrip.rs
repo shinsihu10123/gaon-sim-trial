@@ -2,7 +2,9 @@ use simulation_model::{
     derive_terrain_effects, EntityRegistry, InitialKnowledgeProfile, MapPoint, RegionId,
     RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
 };
-use simulation_save::{create_bundle, decode_bundle, EngineSnapshot, SaveKind, SAVE_FORMAT_VERSION};
+use simulation_save::{
+    create_bundle, decode_bundle, EngineSnapshot, SaveKind, SAVE_FORMAT_VERSION,
+};
 use simulation_worldgen::{
     generate_initial_human_groups, generate_trial_resources, generate_trial_terrain,
     InitialHumanGroupConfig, PermilleRange,
@@ -65,15 +67,9 @@ fn snapshot_with_human_groups(seed: u64, group_count: usize, population: u64) ->
         contact_radius_m: 300_000,
         knowledge_profile: InitialKnowledgeProfile::default(),
     };
-    let groups = generate_initial_human_groups(
-        seed,
-        &config,
-        &spatial,
-        &terrain,
-        &resources,
-        &effects,
-    )
-    .expect("HumanGroups");
+    let groups =
+        generate_initial_human_groups(seed, &config, &spatial, &terrain, &resources, &effects)
+            .expect("HumanGroups");
 
     let mut world = WorldState::new(seed);
     world.terrain = Some(terrain);
@@ -109,10 +105,10 @@ fn spatial_fixture(
         }
         let x_index = index % usize::from(terrain.width);
         let z_index = index / usize::from(terrain.width);
-        let x_m = terrain.bounds.min_x_m
-            + i32::try_from(x_index).expect("x index") * terrain.spacing_m;
-        let z_m = terrain.bounds.min_z_m
-            + i32::try_from(z_index).expect("z index") * terrain.spacing_m;
+        let x_m =
+            terrain.bounds.min_x_m + i32::try_from(x_index).expect("x index") * terrain.spacing_m;
+        let z_m =
+            terrain.bounds.min_z_m + i32::try_from(z_index).expect("z index") * terrain.spacing_m;
         let id = RegionId(u64::try_from(regions.len() + 1).expect("Region ID"));
         regions.push(RegionState {
             id,

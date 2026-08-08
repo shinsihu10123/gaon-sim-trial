@@ -1,8 +1,14 @@
 #![forbid(unsafe_code)]
 
+mod human_groups;
 mod hydrology;
 mod resources;
 
+pub use human_groups::{
+    generate_initial_human_groups, initial_group_contacts, initial_human_group_report,
+    HumanGroupGenerationError, InitialGroupContact, InitialHumanGroupConfig,
+    InitialHumanGroupReport, PermilleRange,
+};
 use hydrology::ensure_seeded_island;
 pub use resources::{
     generate_trial_resources, resource_balance_report, validate_resource_balance,

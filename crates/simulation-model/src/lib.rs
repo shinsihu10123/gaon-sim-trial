@@ -10,9 +10,10 @@ mod world;
 pub use entity::{
     CityEntity, CityId, CityRegistry, CommunityEntity, CommunityId, CommunityRegistry,
     CountryEntity, CountryId, CountryRegistry, EntityKind, EntityRef, EntityRegistry,
-    EntityRegistryError, EntityWorldState, HumanGroupEntity, HumanGroupId, HumanGroupRegistry,
-    PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, RegionId, SettlementEntity,
-    SettlementId, SettlementRegistry, StableEntityId,
+    EntityRegistryError, EntityWorldState, HumanGroupBehaviorProfile, HumanGroupEntity,
+    HumanGroupId, HumanGroupInitialState, HumanGroupRegistry, InitialKnowledgeProfile,
+    KnowledgeSeedValue, PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, RegionId,
+    SettlementEntity, SettlementId, SettlementRegistry, StableEntityId,
 };
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
 pub use resources::{

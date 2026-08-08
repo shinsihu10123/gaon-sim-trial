@@ -144,7 +144,8 @@ pub fn generate_initial_human_groups(
     effects: &TerrainEffectField,
 ) -> Result<HumanGroupRegistry, HumanGroupGenerationError> {
     config.validate()?;
-    if terrain.samples.len() != resources.cells.len() || terrain.samples.len() != effects.samples.len()
+    if terrain.samples.len() != resources.cells.len()
+        || terrain.samples.len() != effects.samples.len()
     {
         return Err(HumanGroupGenerationError::MissingResourceAlignment);
     }
@@ -205,34 +206,35 @@ pub fn generate_initial_human_groups(
 
     let mut candidates = raw_candidates
         .into_iter()
-        .map(|(region_id, x_m, z_m, sample_index, food, carrying, construction_accessibility)| {
-            let food_permille = u16::try_from(
-                u64::from(food).saturating_mul(1_000) / u64::from(max_food),
-            )
-            .unwrap_or(1_000);
-            let carrying_permille = u16::try_from(
-                u64::from(carrying).saturating_mul(1_000) / u64::from(max_carrying),
-            )
-            .unwrap_or(1_000);
-            let natural_food_access_permille =
-                u16::try_from((u32::from(food_permille) + u32::from(carrying_permille)) / 2)
-                    .unwrap_or(1_000);
-            let habitat_score = u64::from(food_permille)
-                .saturating_mul(3)
-                .saturating_add(u64::from(carrying_permille).saturating_mul(2));
-            let jitter = mix64(seed ^ region_id.0 ^ HABITAT_SALT) & 0x3ff;
-            HabitatCandidate {
-                region_id,
-                x_m,
-                z_m,
-                sample_index,
-                food_capacity: food,
-                carrying_capacity: carrying,
-                construction_accessibility,
-                selection_score: habitat_score.saturating_mul(1_024).saturating_add(jitter),
-                natural_food_access_permille,
-            }
-        })
+        .map(
+            |(region_id, x_m, z_m, sample_index, food, carrying, construction_accessibility)| {
+                let food_permille =
+                    u16::try_from(u64::from(food).saturating_mul(1_000) / u64::from(max_food))
+                        .unwrap_or(1_000);
+                let carrying_permille = u16::try_from(
+                    u64::from(carrying).saturating_mul(1_000) / u64::from(max_carrying),
+                )
+                .unwrap_or(1_000);
+                let natural_food_access_permille =
+                    u16::try_from((u32::from(food_permille) + u32::from(carrying_permille)) / 2)
+                        .unwrap_or(1_000);
+                let habitat_score = u64::from(food_permille)
+                    .saturating_mul(3)
+                    .saturating_add(u64::from(carrying_permille).saturating_mul(2));
+                let jitter = mix64(seed ^ region_id.0 ^ HABITAT_SALT) & 0x3ff;
+                HabitatCandidate {
+                    region_id,
+                    x_m,
+                    z_m,
+                    sample_index,
+                    food_capacity: food,
+                    carrying_capacity: carrying,
+                    construction_accessibility,
+                    selection_score: habitat_score.saturating_mul(1_024).saturating_add(jitter),
+                    natural_food_access_permille,
+                }
+            },
+        )
         .collect::<Vec<_>>();
 
     candidates.sort_by(|left, right| {
@@ -372,10 +374,10 @@ fn distribute_population(
     let mut populations = vec![1_u64; config.group_count];
     let mut assigned = 0_u64;
     for (population, weight) in populations.iter_mut().zip(&weights) {
-        let share = u128::from(distributable)
-            .saturating_mul(u128::from(*weight))
-            / u128::from(weight_sum);
-        let share = u64::try_from(share).map_err(|_| HumanGroupGenerationError::PopulationOverflow)?;
+        let share =
+            u128::from(distributable).saturating_mul(u128::from(*weight)) / u128::from(weight_sum);
+        let share =
+            u64::try_from(share).map_err(|_| HumanGroupGenerationError::PopulationOverflow)?;
         *population = population
             .checked_add(share)
             .ok_or(HumanGroupGenerationError::PopulationOverflow)?;
@@ -400,9 +402,7 @@ fn distribute_population(
 fn sample_permille_range(seed: u64, ordinal: u64, salt: u64, range: PermilleRange) -> u16 {
     let span = u64::from(range.max - range.min) + 1;
     let offset = mix64(seed ^ ordinal.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ salt) % span;
-    range
-        .min
-        .saturating_add(u16::try_from(offset).unwrap_or(0))
+    range.min.saturating_add(u16::try_from(offset).unwrap_or(0))
 }
 
 fn sample_index_for_point(terrain: &TerrainState, x_m: i32, z_m: i32) -> Option<usize> {
@@ -417,10 +417,10 @@ fn sample_index_for_point(terrain: &TerrainState, x_m: i32, z_m: i32) -> Option<
     let spacing = i64::from(terrain.spacing_m);
     let x_offset = i64::from(x_m) - i64::from(terrain.bounds.min_x_m);
     let z_offset = i64::from(z_m) - i64::from(terrain.bounds.min_z_m);
-    let x = ((x_offset + spacing / 2) / spacing)
-        .clamp(0, i64::from(terrain.width.saturating_sub(1)));
-    let z = ((z_offset + spacing / 2) / spacing)
-        .clamp(0, i64::from(terrain.height.saturating_sub(1)));
+    let x =
+        ((x_offset + spacing / 2) / spacing).clamp(0, i64::from(terrain.width.saturating_sub(1)));
+    let z =
+        ((z_offset + spacing / 2) / spacing).clamp(0, i64::from(terrain.height.saturating_sub(1)));
     let x = usize::try_from(x).ok()?;
     let z = usize::try_from(z).ok()?;
     z.checked_mul(usize::from(terrain.width))?.checked_add(x)
