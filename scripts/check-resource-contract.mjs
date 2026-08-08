@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 const modelRoot = readFileSync("crates/simulation-model/src/lib.rs", "utf8");
 const resources = readFileSync("crates/simulation-model/src/resources.rs", "utf8");
 const worldgenRoot = readFileSync("crates/simulation-worldgen/src/lib.rs", "utf8");
+const bootstrap = readFileSync("crates/simulation-worldgen/src/bootstrap.rs", "utf8");
 const generator = readFileSync("crates/simulation-worldgen/src/resources.rs", "utf8");
 const save = readFileSync("crates/simulation-save/src/lib.rs", "utf8");
 const binary = readFileSync("crates/simulation-save/src/binary.rs", "utf8");
@@ -54,9 +55,15 @@ for (const fragment of ["write_resource_field", "read_resource_field", "remainin
   }
 }
 
+if (
+  !bootstrap.includes("generate_trial_resources(seed, &terrain)") ||
+  !bootstrap.includes("world.resources = Some(resources)")
+) {
+  throw new Error("shared civilization bootstrap does not create authoritative resources");
+}
 for (const [name, source] of [["WASM", wasm], ["headless", runner]]) {
-  if (!source.includes("generate_trial_resources")) {
-    throw new Error(`${name} initialization does not generate authoritative resources`);
+  if (!source.includes("generate_trial_civilization_origin_world")) {
+    throw new Error(`${name} initialization does not use shared authoritative world bootstrap`);
   }
 }
 

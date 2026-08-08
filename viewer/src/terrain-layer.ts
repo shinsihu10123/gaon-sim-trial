@@ -8,15 +8,27 @@ export class TerrainLayer {
   private terrainMesh: THREE.Mesh | undefined;
   private seaMesh: THREE.Mesh | undefined;
   private riverLines: THREE.LineSegments | undefined;
+  private renderedTerrain: RenderTerrainSnapshot | null = null;
+  private renderedBoundsKey = "";
 
   public constructor(private readonly scene: THREE.Scene) {}
 
   public update(bounds: RenderWorldBounds | null, terrain: RenderTerrainSnapshot | null): void {
-    this.clear();
     if (bounds === null || terrain === null) {
+      if (this.renderedTerrain !== null) {
+        this.clearMeshes();
+        this.renderedTerrain = null;
+        this.renderedBoundsKey = "";
+      }
       return;
     }
 
+    const boundsKey = `${bounds.minXM}:${bounds.maxXM}:${bounds.minZM}:${bounds.maxZM}`;
+    if (this.renderedTerrain === terrain && this.renderedBoundsKey === boundsKey) {
+      return;
+    }
+
+    this.clearMeshes();
     const sampleCount = terrain.width * terrain.height;
     if (
       terrain.elevationM.length !== sampleCount ||
@@ -107,13 +119,17 @@ export class TerrainLayer {
     if (this.riverLines !== undefined) {
       this.scene.add(this.riverLines);
     }
+    this.renderedTerrain = terrain;
+    this.renderedBoundsKey = boundsKey;
   }
 
   public dispose(): void {
-    this.clear();
+    this.clearMeshes();
+    this.renderedTerrain = null;
+    this.renderedBoundsKey = "";
   }
 
-  private clear(): void {
+  private clearMeshes(): void {
     if (this.terrainMesh !== undefined) {
       this.terrainMesh.removeFromParent();
       this.terrainMesh.geometry.dispose();
@@ -141,43 +157,26 @@ function buildRiverLines(
 ): THREE.LineSegments | undefined {
   const segments: number[] = [];
   for (let index = 0; index < terrain.riverOrders.length; index += 1) {
-    if (terrain.riverOrders[index] === 0) {
-      continue;
-    }
-
+    if (terrain.riverOrders[index] === 0) continue;
     const downstream = terrain.downstreamIndices[index];
     if (
       downstream === NO_DOWNSTREAM_INDEX ||
       !Number.isInteger(downstream) ||
       downstream < 0 ||
       downstream >= terrain.riverOrders.length
-    ) {
-      continue;
-    }
+    ) continue;
 
     const sourceOffset = index * 3;
     const targetOffset = downstream * 3;
     segments.push(
-      positions[sourceOffset],
-      positions[sourceOffset + 1] + 0.025,
-      positions[sourceOffset + 2],
-      positions[targetOffset],
-      positions[targetOffset + 1] + 0.025,
-      positions[targetOffset + 2],
+      positions[sourceOffset], positions[sourceOffset + 1] + 0.025, positions[sourceOffset + 2],
+      positions[targetOffset], positions[targetOffset + 1] + 0.025, positions[targetOffset + 2],
     );
   }
-
-  if (segments.length === 0) {
-    return undefined;
-  }
-
+  if (segments.length === 0) return undefined;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(segments, 3));
-  const material = new THREE.LineBasicMaterial({
-    color: 0x5f8fa8,
-    transparent: true,
-    opacity: 0.9,
-  });
+  const material = new THREE.LineBasicMaterial({ color: 0x5f8fa8, transparent: true, opacity: 0.9 });
   const lines = new THREE.LineSegments(geometry, material);
   lines.name = "authoritative-river-network";
   lines.renderOrder = 3;
@@ -186,9 +185,7 @@ function buildRiverLines(
 
 function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
   if (Array.isArray(material)) {
-    for (const item of material) {
-      item.dispose();
-    }
+    for (const item of material) item.dispose();
   } else {
     material.dispose();
   }
@@ -196,19 +193,12 @@ function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
 
 function biomeColor(biomeCode: number, reliefCode: number): number {
   switch (biomeCode) {
-    case 0:
-      return reliefCode === 0 ? 0x17364a : 0x27556f;
-    case 1:
-      return 0x70835a;
-    case 2:
-      return 0x3f6146;
-    case 3:
-      return 0xa69468;
-    case 4:
-      return 0x586f5e;
-    case 5:
-      return 0xaeb0ad;
-    default:
-      return 0x777777;
+    case 0: return reliefCode === 0 ? 0x17364a : 0x27556f;
+    case 1: return 0x70835a;
+    case 2: return 0x3f6146;
+    case 3: return 0xa69468;
+    case 4: return 0x586f5e;
+    case 5: return 0xaeb0ad;
+    default: return 0x777777;
   }
 }

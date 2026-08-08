@@ -4,6 +4,7 @@ const terrainModel = readFileSync("crates/simulation-model/src/terrain.rs", "utf
 const terrainTopology = readFileSync("crates/simulation-model/src/terrain_topology.rs", "utf8");
 const modelRoot = readFileSync("crates/simulation-model/src/lib.rs", "utf8");
 const worldgen = readFileSync("crates/simulation-worldgen/src/lib.rs", "utf8");
+const bootstrap = readFileSync("crates/simulation-worldgen/src/bootstrap.rs", "utf8");
 const islandGen = readFileSync("crates/simulation-worldgen/src/hydrology.rs", "utf8");
 const save = readFileSync("crates/simulation-save/src/lib.rs", "utf8");
 const binary = readFileSync("crates/simulation-save/src/binary.rs", "utf8");
@@ -109,7 +110,11 @@ for (const fragment of [
     throw new Error(`Stage 2.2 render terrain contract missing: ${fragment}`);
   }
 }
-if (!wasm.includes("generate_trial_terrain(seed)")) {
+if (
+  !wasm.includes("generate_trial_civilization_origin_world") ||
+  !bootstrap.includes("generate_trial_terrain(seed)") ||
+  !bootstrap.includes("world.terrain = Some(terrain)")
+) {
   throw new Error("browser authoritative engine is not bootstrapped with generated terrain");
 }
 for (const fragment of [

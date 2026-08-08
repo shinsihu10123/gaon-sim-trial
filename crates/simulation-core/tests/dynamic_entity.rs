@@ -1,9 +1,10 @@
 use simulation_core::SimulationEngine;
 use simulation_model::{
     CommandError, CommandPayload, CommandTiming, CommunityId, CountryId, EntityRef, EntityRegistry,
-    EntityRegistryError, EventCategory, EventPayload, HumanGroupId, MapPoint, PoliticalEntityId,
-    RegionDraft, RegionId, RegionPoliticalState, RegionState, RegionSurface, SettlementId,
-    WorldBounds, WorldSpatialState,
+    EntityRegistryError, EventCategory, EventPayload, HumanGroupBehaviorProfile, HumanGroupId,
+    HumanGroupInitialState, InitialKnowledgeProfile, MapPoint, PoliticalEntityId, RegionDraft,
+    RegionId, RegionPoliticalState, RegionState, RegionSurface, SettlementId, WorldBounds,
+    WorldSpatialState,
 };
 use simulation_save::{create_bundle, SaveKind};
 
@@ -164,6 +165,58 @@ fn referenced_country_removal_is_rejected_without_mutation() {
     engine.tick();
 
     assert!(engine.state().entities.countries.contains(CountryId(1)));
+    assert!(engine.event_log().iter().any(|event| {
+        matches!(
+            event.payload,
+            EventPayload::EntityMutationRejected {
+                error: EntityRegistryError::ReferenceInUse
+            }
+        )
+    }));
+}
+
+#[test]
+fn human_group_region_reference_blocks_region_removal() {
+    let mut snapshot = SimulationEngine::new(13).export_snapshot();
+    snapshot.world.spatial = WorldSpatialState::new(
+        WorldBounds::new(0, 1_000, 0, 1_000).expect("bounds"),
+        vec![region(RegionId(1), 100, Vec::new())],
+    )
+    .expect("spatial world");
+    snapshot
+        .world
+        .entities
+        .human_groups
+        .create_initialized(HumanGroupInitialState {
+            region_id: RegionId(1),
+            x_m: 100,
+            z_m: 100,
+            terrain_sample_index: 0,
+            population: 100,
+            food_stock_person_days: 3_000,
+            basic_resource_stock_units: 500,
+            behavior: HumanGroupBehaviorProfile {
+                mobility_permille: 400,
+                exploration_permille: 400,
+                settlement_bias_permille: 400,
+            },
+            knowledge: InitialKnowledgeProfile::default(),
+        })
+        .expect("group initializes");
+
+    let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("world saves");
+    let mut engine = SimulationEngine::from_save_bundle(&bundle).expect("world restores");
+    engine
+        .submit_system_command(
+            CommandTiming::Immediate,
+            CommandPayload::RemoveRegionEntity {
+                region_id: RegionId(1),
+            },
+        )
+        .expect("remove attempt queued");
+    engine.tick();
+
+    assert!(engine.state().spatial.region(RegionId(1)).is_some());
     assert!(engine.event_log().iter().any(|event| {
         matches!(
             event.payload,

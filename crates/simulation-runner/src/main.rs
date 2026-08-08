@@ -3,9 +3,13 @@
 use std::time::Duration;
 
 use simulation_core::{SimulationClock, SimulationEngine, SimulationSpeed};
-use simulation_model::{CommandPayload, CommandTiming, CountryId, SimulationDate, TerrainState};
+use simulation_model::{
+    CommandPayload, CommandTiming, CountryId, EntityRegistry, SimulationDate, TerrainState,
+};
 use simulation_save::{create_bundle, SaveKind};
-use simulation_worldgen::{generate_trial_resources, generate_trial_terrain};
+use simulation_worldgen::{
+    generate_trial_civilization_origin_world, trial_preview_human_group_config,
+};
 
 fn main() {
     let seed = 1;
@@ -41,12 +45,7 @@ fn main() {
     )
     .expect("headless command journal must replay");
     let mut replay_snapshot = replayed_without_worldgen.export_snapshot();
-    let replay_terrain =
-        generate_trial_terrain(engine.state().seed).expect("replay terrain must regenerate");
-    let replay_resources = generate_trial_resources(engine.state().seed, &replay_terrain)
-        .expect("replay resources must regenerate");
-    replay_snapshot.world.resources = Some(replay_resources);
-    replay_snapshot.world.terrain = Some(replay_terrain);
+    apply_shared_bootstrap_to_replay(&mut replay_snapshot.world, engine.state().seed);
     let replay_bundle =
         create_bundle(&replay_snapshot, SaveKind::Manual).expect("replay snapshot must save");
     let replayed =
@@ -80,7 +79,7 @@ fn main() {
         .unwrap_or(0);
 
     println!(
-        "date={:04}-{:02}-{:02} elapsed_days={} ticks={} commands={} events={} journal={} render_stride={} terrain_samples={} land_samples={} river_samples={} drainage_basins={} islands={} save_json_bytes={} save_state_bytes={} canonical_digest={:016x} random_probe={:016x}",
+        "date={:04}-{:02}-{:02} elapsed_days={} ticks={} commands={} events={} journal={} render_stride={} terrain_samples={} land_samples={} river_samples={} drainage_basins={} islands={} regions={} human_groups={} save_json_bytes={} save_state_bytes={} canonical_digest={:016x} random_probe={:016x}",
         restored.state().date.year,
         restored.state().date.month,
         restored.state().date.day,
@@ -95,6 +94,8 @@ fn main() {
         river_samples,
         drainage_basins,
         landmasses.island_landmass_ids.len(),
+        restored.state().spatial.regions.len(),
+        restored.state().entities.human_groups.len(),
         bundle.metadata_json.len(),
         bundle.state_binary.len(),
         canonical_digest,
@@ -104,14 +105,25 @@ fn main() {
 
 fn initialized_engine(seed: u64) -> SimulationEngine {
     let mut initial = SimulationEngine::new(seed).export_snapshot();
-    let terrain = generate_trial_terrain(seed).expect("trial terrain must generate");
-    initial.world.resources =
-        Some(generate_trial_resources(seed, &terrain).expect("trial resources must generate"));
-    initial.world.terrain = Some(terrain);
+    initial.world =
+        generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
+            .expect("trial civilization-origin world must generate");
     let bundle =
         create_bundle(&initial, SaveKind::Manual).expect("trial initial state must be saveable");
     SimulationEngine::from_save_bundle(&bundle)
         .expect("trial initial state must restore into the engine")
+}
+
+fn apply_shared_bootstrap_to_replay(world: &mut simulation_model::WorldState, seed: u64) {
+    let bootstrap =
+        generate_trial_civilization_origin_world(seed, &trial_preview_human_group_config())
+            .expect("replay bootstrap world must generate");
+    world.terrain = bootstrap.terrain;
+    world.resources = bootstrap.resources;
+    world.spatial = bootstrap.spatial;
+    if world.entities.human_groups.is_empty() {
+        world.entities.human_groups = bootstrap.entities.human_groups;
+    }
 }
 
 fn authoritative_terrain(engine: &SimulationEngine) -> &TerrainState {

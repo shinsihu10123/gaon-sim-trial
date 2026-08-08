@@ -26,6 +26,7 @@ export class EntitySelectionLayer {
   private readonly pointer = new THREE.Vector2();
   private readonly targets = new Map<string, EntitySelectionTarget>();
   private readonly regions = new Map<string, RenderRegionSnapshot>();
+  private readonly proxies = new Map<string, THREE.Object3D>();
   private transform: WorldSpaceTransform | undefined;
   private selectedKey: string | undefined;
 
@@ -36,22 +37,43 @@ export class EntitySelectionLayer {
   }
 
   public update(world: RenderWorldSnapshot): void {
-    this.clearPickTargets();
-    this.clearHighlight();
+    const previousSelectedKey = this.selectedKey;
     this.targets.clear();
     this.regions.clear();
-    this.selectedKey = undefined;
     this.transform = world.bounds === null ? undefined : new WorldSpaceTransform(world.bounds);
     if (this.transform === undefined) {
+      this.clearPickTargets();
+      this.clearHighlight();
+      this.selectedKey = undefined;
       return;
     }
 
+    const activeKeys = new Set<string>();
     for (const region of world.regions) {
-      this.registerRegion(region);
+      const key = this.registerRegion(region);
+      if (key !== undefined) activeKeys.add(key);
     }
     for (const group of world.humanGroups) {
-      this.registerHumanGroup(group, world);
+      const key = this.registerHumanGroup(group, world);
+      if (key !== undefined) activeKeys.add(key);
     }
+    for (const [key, proxy] of [...this.proxies.entries()]) {
+      if (!activeKeys.has(key)) {
+        disposeObject(proxy);
+        this.proxies.delete(key);
+      }
+    }
+
+    this.clearHighlight();
+    if (previousSelectedKey !== undefined) {
+      const target = this.targets.get(previousSelectedKey);
+      if (target !== undefined) {
+        this.selectedKey = previousSelectedKey;
+        this.renderHighlight(target);
+        return;
+      }
+    }
+    this.selectedKey = undefined;
   }
 
   public listTargets(): EntitySelectionTarget[] {
@@ -63,10 +85,7 @@ export class EntitySelectionLayer {
 
   public findTarget(kind: SelectableEntityKind, id: string): EntitySelectionTarget | undefined {
     const target = this.targets.get(selectionKey(kind, id));
-    if (target === undefined) {
-      return undefined;
-    }
-    return { ...target, scenePoint: target.scenePoint.clone() };
+    return target === undefined ? undefined : { ...target, scenePoint: target.scenePoint.clone() };
   }
 
   public pickFromClientPoint(
@@ -76,23 +95,16 @@ export class EntitySelectionLayer {
     element: HTMLElement,
   ): EntitySelectionTarget | undefined {
     const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      return undefined;
-    }
+    if (rect.width <= 0 || rect.height <= 0) return undefined;
     this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointer, camera);
 
-    const intersections = this.raycaster.intersectObjects(this.pickGroup.children, true);
-    for (const intersection of intersections) {
+    for (const intersection of this.raycaster.intersectObjects(this.pickGroup.children, true)) {
       const key = intersection.object.userData.selectionKey;
-      if (typeof key !== "string") {
-        continue;
-      }
+      if (typeof key !== "string") continue;
       const target = this.targets.get(key);
-      if (target !== undefined) {
-        return { ...target, scenePoint: target.scenePoint.clone() };
-      }
+      if (target !== undefined) return { ...target, scenePoint: target.scenePoint.clone() };
     }
     return undefined;
   }
@@ -100,10 +112,93 @@ export class EntitySelectionLayer {
   public select(target: EntitySelectionTarget | undefined): void {
     this.clearHighlight();
     this.selectedKey = target === undefined ? undefined : selectionKey(target.kind, target.id);
-    if (target === undefined || this.transform === undefined) {
-      return;
+    if (target !== undefined && this.transform !== undefined) this.renderHighlight(target);
+  }
+
+  public selectedTarget(): EntitySelectionTarget | undefined {
+    if (this.selectedKey === undefined) return undefined;
+    const target = this.targets.get(this.selectedKey);
+    return target === undefined ? undefined : { ...target, scenePoint: target.scenePoint.clone() };
+  }
+
+  public dispose(): void {
+    this.clearPickTargets();
+    this.clearHighlight();
+    this.targets.clear();
+    this.regions.clear();
+    this.proxies.clear();
+    this.pickGroup.removeFromParent();
+    this.highlightGroup.removeFromParent();
+  }
+
+  private registerRegion(region: RenderRegionSnapshot): string | undefined {
+    if (this.transform === undefined || region.boundary.length < 3) return undefined;
+    const focus = this.transform.worldPointToScene(region.center.xM, region.center.zM, 0.18);
+    const target: EntitySelectionTarget = { kind: "region", id: region.id, scenePoint: focus };
+    const key = selectionKey(target.kind, target.id);
+    this.targets.set(key, target);
+    this.regions.set(region.id, region);
+
+    const bounds = this.transform.bounds;
+    const signature = `${bounds.minXM}:${bounds.maxXM}:${bounds.minZM}:${bounds.maxZM}|${region.boundary
+      .map((point) => `${point.xM},${point.zM}`)
+      .join(";")}`;
+    const existing = this.proxies.get(key);
+    if (existing?.userData.signature === signature) return key;
+    if (existing !== undefined) {
+      disposeObject(existing);
+      this.proxies.delete(key);
     }
 
+    const shape = new THREE.Shape();
+    const first = this.transform.worldPointToScene(region.boundary[0].xM, region.boundary[0].zM);
+    shape.moveTo(first.x, -first.z);
+    for (const point of region.boundary.slice(1)) {
+      const scenePoint = this.transform.worldPointToScene(point.xM, point.zM);
+      shape.lineTo(scenePoint.x, -scenePoint.z);
+    }
+    shape.closePath();
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0, depthWrite: false });
+    material.colorWrite = false;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.12;
+    mesh.name = `region-hit-${region.id}`;
+    mesh.userData.selectionKey = key;
+    mesh.userData.signature = signature;
+    this.pickGroup.add(mesh);
+    this.proxies.set(key, mesh);
+    return key;
+  }
+
+  private registerHumanGroup(group: RenderHumanGroupSnapshot, world: RenderWorldSnapshot): string | undefined {
+    if (this.transform === undefined) return undefined;
+    const sceneY = sceneHeightAt(world, this.transform, group.xM, group.zM) + 0.35;
+    const point = this.transform.worldPointToScene(group.xM, group.zM, sceneY);
+    const target: EntitySelectionTarget = { kind: "human_group", id: group.id, scenePoint: point };
+    const key = selectionKey(target.kind, target.id);
+    this.targets.set(key, target);
+
+    const existing = this.proxies.get(key);
+    if (existing instanceof THREE.Mesh) {
+      existing.position.copy(point);
+      return key;
+    }
+    if (existing !== undefined) disposeObject(existing);
+    const geometry = new THREE.SphereGeometry(0.75, 10, 8);
+    const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    material.colorWrite = false;
+    const proxy = new THREE.Mesh(geometry, material);
+    proxy.position.copy(point);
+    proxy.name = `human-group-hit-${group.id}`;
+    proxy.userData.selectionKey = key;
+    this.pickGroup.add(proxy);
+    this.proxies.set(key, proxy);
+    return key;
+  }
+
+  private renderHighlight(target: EntitySelectionTarget): void {
     if (target.kind === "region") {
       const region = this.regions.get(target.id);
       if (region !== undefined) {
@@ -114,93 +209,11 @@ export class EntitySelectionLayer {
     this.highlightGroup.add(this.createPointReticle(target.scenePoint));
   }
 
-  public selectedTarget(): EntitySelectionTarget | undefined {
-    if (this.selectedKey === undefined) {
-      return undefined;
-    }
-    const target = this.targets.get(this.selectedKey);
-    return target === undefined ? undefined : { ...target, scenePoint: target.scenePoint.clone() };
-  }
-
-  public dispose(): void {
-    this.clearPickTargets();
-    this.clearHighlight();
-    this.targets.clear();
-    this.regions.clear();
-    this.pickGroup.removeFromParent();
-    this.highlightGroup.removeFromParent();
-  }
-
-  private registerRegion(region: RenderRegionSnapshot): void {
-    if (this.transform === undefined || region.boundary.length < 3) {
-      return;
-    }
-    const focus = this.transform.worldPointToScene(region.center.xM, region.center.zM, 0.18);
-    const target: EntitySelectionTarget = { kind: "region", id: region.id, scenePoint: focus };
-    const key = selectionKey(target.kind, target.id);
-    this.targets.set(key, target);
-    this.regions.set(region.id, region);
-
-    const shape = new THREE.Shape();
-    const first = this.transform.worldPointToScene(region.boundary[0].xM, region.boundary[0].zM);
-    shape.moveTo(first.x, -first.z);
-    for (const point of region.boundary.slice(1)) {
-      const scenePoint = this.transform.worldPointToScene(point.xM, point.zM);
-      shape.lineTo(scenePoint.x, -scenePoint.z);
-    }
-    shape.closePath();
-
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshBasicMaterial({
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
-    material.colorWrite = false;
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 0.12;
-    mesh.name = `region-hit-${region.id}`;
-    mesh.userData.selectionKey = key;
-    this.pickGroup.add(mesh);
-  }
-
-  private registerHumanGroup(group: RenderHumanGroupSnapshot, world: RenderWorldSnapshot): void {
-    if (this.transform === undefined) {
-      return;
-    }
-    const sceneY = sceneHeightAt(world, this.transform, group.xM, group.zM) + 0.35;
-    const point = this.transform.worldPointToScene(group.xM, group.zM, sceneY);
-    const target: EntitySelectionTarget = {
-      kind: "human_group",
-      id: group.id,
-      scenePoint: point,
-    };
-    const key = selectionKey(target.kind, target.id);
-    this.targets.set(key, target);
-
-    const geometry = new THREE.SphereGeometry(0.75, 10, 8);
-    const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
-    material.colorWrite = false;
-    const proxy = new THREE.Mesh(geometry, material);
-    proxy.position.copy(point);
-    proxy.name = `human-group-hit-${group.id}`;
-    proxy.userData.selectionKey = key;
-    this.pickGroup.add(proxy);
-  }
-
   private createRegionHighlight(region: RenderRegionSnapshot): THREE.LineLoop {
-    if (this.transform === undefined) {
-      throw new Error("selection transform unavailable");
-    }
-    const points = region.boundary.map((point) => {
-      const scenePoint = this.transform?.worldPointToScene(point.xM, point.zM, 0.22);
-      if (scenePoint === undefined) {
-        throw new Error("selection transform unavailable");
-      }
-      return scenePoint;
-    });
+    if (this.transform === undefined) throw new Error("selection transform unavailable");
+    const points = region.boundary.map((point) =>
+      this.transform!.worldPointToScene(point.xM, point.zM, 0.22),
+    );
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false });
     const line = new THREE.LineLoop(geometry, material);
@@ -211,11 +224,7 @@ export class EntitySelectionLayer {
 
   private createPointReticle(point: THREE.Vector3): THREE.Mesh {
     const geometry = new THREE.RingGeometry(0.8, 1.05, 28);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
-      depthTest: false,
-    });
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, depthTest: false });
     const ring = new THREE.Mesh(geometry, material);
     ring.rotation.x = -Math.PI / 2;
     ring.position.copy(point);
@@ -225,11 +234,12 @@ export class EntitySelectionLayer {
   }
 
   private clearPickTargets(): void {
-    disposeChildren(this.pickGroup);
+    for (const proxy of this.proxies.values()) disposeObject(proxy);
+    this.proxies.clear();
   }
 
   private clearHighlight(): void {
-    disposeChildren(this.highlightGroup);
+    for (const child of [...this.highlightGroup.children]) disposeObject(child);
   }
 }
 
@@ -237,41 +247,24 @@ export function selectionKey(kind: SelectableEntityKind, id: string): string {
   return `${kind}:${id}`;
 }
 
-function sceneHeightAt(
-  world: RenderWorldSnapshot,
-  transform: WorldSpaceTransform,
-  xM: number,
-  zM: number,
-): number {
+function sceneHeightAt(world: RenderWorldSnapshot, transform: WorldSpaceTransform, xM: number, zM: number): number {
   const terrain = world.terrain;
-  if (terrain === null || terrain.spacingM <= 0) {
-    return 0;
-  }
+  if (terrain === null || terrain.spacingM <= 0) return 0;
   const x = Math.round((xM - transform.bounds.minXM) / terrain.spacingM);
   const z = Math.round((zM - transform.bounds.minZM) / terrain.spacingM);
-  if (x < 0 || z < 0 || x >= terrain.width || z >= terrain.height) {
-    return 0;
-  }
-  const elevation = terrain.elevationM[z * terrain.width + x];
-  return transform.elevationToSceneY(elevation ?? 0);
+  if (x < 0 || z < 0 || x >= terrain.width || z >= terrain.height) return 0;
+  return transform.elevationToSceneY(terrain.elevationM[z * terrain.width + x] ?? 0);
 }
 
-function disposeChildren(group: THREE.Group): void {
-  for (const child of [...group.children]) {
-    child.removeFromParent();
-    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-      child.geometry.dispose();
-      disposeMaterial(child.material);
+function disposeObject(object: THREE.Object3D): void {
+  object.removeFromParent();
+  if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+    object.geometry.dispose();
+    const material = object.material;
+    if (Array.isArray(material)) {
+      for (const item of material) item.dispose();
+    } else {
+      material.dispose();
     }
-  }
-}
-
-function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-  if (Array.isArray(material)) {
-    for (const item of material) {
-      item.dispose();
-    }
-  } else {
-    material.dispose();
   }
 }
