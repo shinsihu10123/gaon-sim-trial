@@ -22,18 +22,22 @@ const protocolTests = readFileSync(
 
 for (const fragment of [
   "pub struct HumanGroupInitialState",
+  "pub struct HumanGroupState",
   "pub population: u64",
   "pub food_stock_person_days: u64",
   "pub basic_resource_stock_units: u64",
+  "pub nutrition_permille: u16",
+  "pub cohesion_permille: u16",
+  "pub risk_permille: u16",
   "pub struct HumanGroupBehaviorProfile",
   "pub mobility_permille: u16",
   "pub exploration_permille: u16",
   "pub settlement_bias_permille: u16",
   "pub struct InitialKnowledgeProfile",
-  "pub fn create_initialized",
+  "pub fn create_initialized_with_runtime",
 ]) {
   if (!modelEntity.includes(fragment)) {
-    throw new Error(`Stage 2.6 model contract missing: ${fragment}`);
+    throw new Error(`Stage 2.6/3.1 model contract missing: ${fragment}`);
   }
 }
 
@@ -52,6 +56,7 @@ for (const fragment of [
   "pub group_count: usize",
   "pub total_population: u64",
   "pub contact_radius_m: u32",
+  "pub runtime_seed: HumanGroupRuntimeSeed",
   "RegionSurface::Land",
   "carrying_capacity_people_per_km2",
   "food_capacity_tonnes_per_year",
@@ -59,7 +64,7 @@ for (const fragment of [
   "distribute_population",
 ]) {
   if (!generator.includes(fragment)) {
-    throw new Error(`Stage 2.6 generator contract missing: ${fragment}`);
+    throw new Error(`Stage 2.6/3.1 generator contract missing: ${fragment}`);
   }
 }
 
@@ -75,40 +80,50 @@ for (const forbidden of [
 }
 
 const saveVersion = save.match(/pub const SAVE_FORMAT_VERSION: u32 = (\d+)/);
-if (saveVersion === null || Number(saveVersion[1]) < 6) {
-  throw new Error("Stage 2.6 requires save format v6 or newer");
+if (saveVersion === null || Number(saveVersion[1]) < 7) {
+  throw new Error("Stage 3.1 authoritative HumanGroup state requires save format v7 or newer");
 }
 for (const fragment of [
   "write_human_group",
   "read_human_group",
   "HumanGroup initial state references invalid geography",
   "knowledge_seed_values",
+  "nutrition_permille",
+  "cohesion_permille",
+  "risk_permille",
 ]) {
   if (!binary.includes(fragment) && !save.includes(fragment)) {
-    throw new Error(`Stage 2.6 persistence contract missing: ${fragment}`);
+    throw new Error(`Stage 3.1 persistence contract missing: ${fragment}`);
   }
 }
 
 const renderVersion = protocol.match(/pub const RENDER_SNAPSHOT_VERSION: u32 = (\d+)/);
-if (renderVersion === null || Number(renderVersion[1]) < 5) {
-  throw new Error("Stage 2.6 requires RenderSnapshot v5 or newer");
+if (renderVersion === null || Number(renderVersion[1]) < 7) {
+  throw new Error("Stage 3.1 authoritative HumanGroup state requires RenderSnapshot v7 or newer");
 }
 for (const fragment of [
   "pub struct RenderHumanGroupSnapshot",
   "pub human_groups: Vec<RenderHumanGroupSnapshot>",
   "id: group.id.0.to_string()",
-  "region_id: initial.region_id.0.to_string()",
+  "region_id: state.region_id.0.to_string()",
+  "population: state.population.to_string()",
+  "nutrition_permille: state.nutrition_permille",
+  "cohesion_permille: state.cohesion_permille",
+  "risk_permille: state.risk_permille",
 ]) {
   if (!protocol.includes(fragment)) {
-    throw new Error(`Stage 2.6 render contract missing: ${fragment}`);
+    throw new Error(`Stage 3.1 render contract missing: ${fragment}`);
   }
 }
 for (const fragment of [
   "export interface RenderHumanGroupSnapshot",
   "humanGroups: RenderHumanGroupSnapshot[]",
+  "nutritionPermille: number",
+  "cohesionPermille: number",
+  "riskPermille: number",
 ]) {
   if (!viewerTypes.includes(fragment)) {
-    throw new Error(`Stage 2.6 TypeScript contract missing: ${fragment}`);
+    throw new Error(`Stage 3.1 TypeScript contract missing: ${fragment}`);
   }
 }
 
@@ -118,9 +133,10 @@ for (const fragment of [
   "initialization_leaves_modern_state_systems_inactive",
   "same_seed_reproduces_groups_while_other_seed_changes_initialization",
   "contact_matrix_covers_every_pair_and_uses_distance_threshold",
+  "group.state.as_ref().expect(\"runtime state\")",
 ]) {
   if (!generationTests.includes(fragment)) {
-    throw new Error(`Stage 2.6 generation acceptance missing: ${fragment}`);
+    throw new Error(`Stage 2.6/3.1 generation acceptance missing: ${fragment}`);
   }
 }
 for (const fragment of [
@@ -135,17 +151,27 @@ for (const fragment of [
   }
 }
 for (const fragment of [
-  "initialized_human_groups_round_trip_exactly_in_save_v6",
+  "authoritative_human_groups_round_trip_exactly_in_save_v7",
   "initial_human_group_state_changes_canonical_binary",
+  "authoritative_runtime_state_changes_canonical_binary",
+  "group.initial.is_some() && group.state.is_some()",
 ]) {
   if (!saveTests.includes(fragment)) {
-    throw new Error(`Stage 2.6 save acceptance missing: ${fragment}`);
+    throw new Error(`Stage 3.1 save acceptance missing: ${fragment}`);
   }
 }
-if (!protocolTests.includes("zero_country_world_exposes_initialized_human_group_snapshot")) {
-  throw new Error("Stage 2.6 RenderSnapshot acceptance missing");
+for (const fragment of [
+  "zero_country_world_exposes_authoritative_human_group_snapshot",
+  "create_initialized_with_runtime",
+  "group.nutrition_permille",
+  "group.cohesion_permille",
+  "group.risk_permille",
+]) {
+  if (!protocolTests.includes(fragment)) {
+    throw new Error(`Stage 3.1 RenderSnapshot acceptance missing: ${fragment}`);
+  }
 }
 
 console.log(
-  `Stage 2.6 initial HumanGroup contract verified on save v${saveVersion[1]} / render v${renderVersion[1]}`,
+  `Stage 3.1 authoritative HumanGroup contract verified on save v${saveVersion[1]} / render v${renderVersion[1]}`,
 );

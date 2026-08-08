@@ -64,8 +64,9 @@ export interface RenderHumanGroupSnapshot {
   foodStockPersonDays: string;
   basicResourceStockUnits: string;
   mobilityPermille: number;
-  explorationPermille: number;
-  settlementBiasPermille: number;
+  nutritionPermille: number;
+  cohesionPermille: number;
+  riskPermille: number;
 }
 
 export interface RenderWorldSnapshot {

@@ -1,12 +1,12 @@
 use simulation_model::{
-    EntityRegistry, HumanGroupBehaviorProfile, HumanGroupInitialState, InitialKnowledgeProfile,
-    MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState,
-    WorldState,
+    EntityRegistry, HumanGroupBehaviorProfile, HumanGroupInitialState, HumanGroupRuntimeSeed,
+    InitialKnowledgeProfile, MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface,
+    WorldSpatialState, WorldState,
 };
 use simulation_protocol::{RenderSnapshot, RENDER_SNAPSHOT_VERSION};
 
 #[test]
-fn zero_country_world_exposes_initialized_human_group_snapshot() {
+fn zero_country_world_exposes_authoritative_human_group_snapshot() {
     let mut world = WorldState::new(2026);
     world.spatial = WorldSpatialState::new(
         simulation_model::WorldBounds::new(0, 1_000, 0, 1_000).expect("bounds"),
@@ -27,26 +27,33 @@ fn zero_country_world_exposes_initialized_human_group_snapshot() {
     let id = world
         .entities
         .human_groups
-        .create_initialized(HumanGroupInitialState {
-            region_id: RegionId(1),
-            x_m: 500,
-            z_m: 500,
-            terrain_sample_index: 0,
-            population: 1_234,
-            food_stock_person_days: 37_020,
-            basic_resource_stock_units: 4_000,
-            behavior: HumanGroupBehaviorProfile {
-                mobility_permille: 350,
-                exploration_permille: 420,
-                settlement_bias_permille: 510,
+        .create_initialized_with_runtime(
+            HumanGroupInitialState {
+                region_id: RegionId(1),
+                x_m: 500,
+                z_m: 500,
+                terrain_sample_index: 0,
+                population: 1_234,
+                food_stock_person_days: 37_020,
+                basic_resource_stock_units: 4_000,
+                behavior: HumanGroupBehaviorProfile {
+                    mobility_permille: 350,
+                    exploration_permille: 420,
+                    settlement_bias_permille: 510,
+                },
+                knowledge: InitialKnowledgeProfile::default(),
             },
-            knowledge: InitialKnowledgeProfile::default(),
-        })
-        .expect("initialized group");
+            HumanGroupRuntimeSeed {
+                nutrition_permille: 910,
+                cohesion_permille: 620,
+                risk_permille: 140,
+            },
+        )
+        .expect("initialized runtime group");
     assert!(world.entities.countries.is_empty());
 
     let snapshot = RenderSnapshot::from_world(&world, 0, 0, 0x55);
-    assert_eq!(RENDER_SNAPSHOT_VERSION, 6);
+    assert_eq!(RENDER_SNAPSHOT_VERSION, 7);
     assert_eq!(snapshot.world.human_groups.len(), 1);
     let group = &snapshot.world.human_groups[0];
     assert_eq!(group.id, id.0.to_string());
@@ -57,4 +64,7 @@ fn zero_country_world_exposes_initialized_human_group_snapshot() {
     assert_eq!(group.x_m, 500);
     assert_eq!(group.z_m, 500);
     assert_eq!(group.mobility_permille, 350);
+    assert_eq!(group.nutrition_permille, 910);
+    assert_eq!(group.cohesion_permille, 620);
+    assert_eq!(group.risk_permille, 140);
 }

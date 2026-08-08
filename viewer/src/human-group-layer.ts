@@ -102,10 +102,12 @@ export class HumanGroupLayer {
 
     const bodyMaterial = visual.body.material as THREE.MeshStandardMaterial;
     const haloMaterial = visual.halo.material as THREE.MeshBasicMaterial;
-    const settlementBias = clamp01(snapshot.settlementBiasPermille / 1000);
+    const nutrition = clamp01(snapshot.nutritionPermille / 1000);
+    const cohesion = clamp01(snapshot.cohesionPermille / 1000);
+    const risk = clamp01(snapshot.riskPermille / 1000);
     const mobility = clamp01(snapshot.mobilityPermille / 1000);
-    bodyMaterial.color.setHSL(0.11 - mobility * 0.025, 0.42 + settlementBias * 0.18, 0.56);
-    haloMaterial.opacity = 0.25 + snapshot.explorationPermille / 1000 * 0.3;
+    bodyMaterial.color.setHSL(0.08 + nutrition * 0.05 - risk * 0.035, 0.38 + cohesion * 0.2, 0.48 + nutrition * 0.1);
+    haloMaterial.opacity = 0.2 + mobility * 0.18 + cohesion * 0.12;
   }
 
   private clear(): void {

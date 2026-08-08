@@ -1,6 +1,7 @@
 use simulation_model::{
-    derive_terrain_effects, InitialKnowledgeProfile, MapPoint, RegionId, RegionPoliticalState,
-    RegionState, RegionSurface, WorldSpatialState, WorldState, TRIAL_REGION_COUNT,
+    derive_terrain_effects, HumanGroupRuntimeSeed, InitialKnowledgeProfile, MapPoint, RegionId,
+    RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
+    TRIAL_REGION_COUNT,
 };
 
 use crate::{
@@ -48,6 +49,11 @@ pub fn trial_preview_human_group_config() -> InitialHumanGroupConfig {
         mobility_permille: PermilleRange { min: 100, max: 500 },
         exploration_permille: PermilleRange { min: 150, max: 650 },
         settlement_bias_permille: PermilleRange { min: 200, max: 700 },
+        runtime_seed: HumanGroupRuntimeSeed {
+            nutrition_permille: 1_000,
+            cohesion_permille: 500,
+            risk_permille: 500,
+        },
         contact_radius_m: 400_000,
         knowledge_profile: InitialKnowledgeProfile::default(),
     }

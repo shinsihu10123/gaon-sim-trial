@@ -1,6 +1,7 @@
 use simulation_model::{
-    derive_terrain_effects, EntityRegistry, InitialKnowledgeProfile, MapPoint, RegionId,
-    RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
+    derive_terrain_effects, EntityRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile,
+    MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState,
+    WorldState,
 };
 use simulation_worldgen::{
     generate_initial_human_groups, generate_trial_resources, generate_trial_terrain,
@@ -45,6 +46,7 @@ fn groups_use_distinct_habitable_regions_and_valid_initial_stocks() {
 
     for group in groups.iter() {
         let initial = group.initial.as_ref().expect("initialized");
+        let state = group.state.as_ref().expect("runtime state");
         assert!(spatial.region(initial.region_id).is_some());
         assert!(initial.food_stock_person_days >= initial.population * 20);
         assert!(initial.food_stock_person_days <= initial.population * 60);
@@ -52,6 +54,19 @@ fn groups_use_distinct_habitable_regions_and_valid_initial_stocks() {
         assert!((100..=500).contains(&initial.behavior.mobility_permille));
         assert!((150..=650).contains(&initial.behavior.exploration_permille));
         assert!((200..=700).contains(&initial.behavior.settlement_bias_permille));
+        assert_eq!(state.id, group.id);
+        assert_eq!(state.region_id, initial.region_id);
+        assert_eq!(state.population, initial.population);
+        assert_eq!(state.mobility_permille, initial.behavior.mobility_permille);
+        assert_eq!(
+            state.nutrition_permille,
+            config.runtime_seed.nutrition_permille
+        );
+        assert_eq!(
+            state.cohesion_permille,
+            config.runtime_seed.cohesion_permille
+        );
+        assert_eq!(state.risk_permille, config.runtime_seed.risk_permille);
     }
 }
 
@@ -124,6 +139,11 @@ fn config(group_count: usize, total_population: u64) -> InitialHumanGroupConfig 
         mobility_permille: PermilleRange { min: 100, max: 500 },
         exploration_permille: PermilleRange { min: 150, max: 650 },
         settlement_bias_permille: PermilleRange { min: 200, max: 700 },
+        runtime_seed: HumanGroupRuntimeSeed {
+            nutrition_permille: 1_000,
+            cohesion_permille: 500,
+            risk_permille: 500,
+        },
         contact_radius_m: 400_000,
         knowledge_profile: InitialKnowledgeProfile::default(),
     }
