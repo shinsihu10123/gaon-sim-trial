@@ -38,7 +38,11 @@ for (const fragment of [
   "pub settlements: Vec<RenderIdentitySnapshot>",
   "pub countries: Vec<RenderIdentitySnapshot>",
   "pub cities: Vec<RenderCitySnapshot>",
-  "population: initial.population.to_string()",
+  "population: state.population.to_string()",
+  "region_id: state.region_id.0.to_string()",
+  "nutrition_permille: state.nutrition_permille",
+  "cohesion_permille: state.cohesion_permille",
+  "risk_permille: state.risk_permille",
 ]) {
   if (!protocol.includes(fragment)) throw new Error(`render protocol hardening missing: ${fragment}`);
 }
@@ -54,11 +58,19 @@ if (!topology.includes("private readonly visuals = new Map")) {
 for (const fragment of ["previousSelectedKey", "private readonly proxies = new Map", "this.renderHighlight(target)"]) {
   if (!selection.includes(fragment)) throw new Error(`selection retention missing: ${fragment}`);
 }
-for (const fragment of ["population: string", "foodStockPersonDays: string", "countries: RenderIdentitySnapshot[]", "cities: RenderCitySnapshot[]"]) {
+for (const fragment of [
+  "population: string",
+  "foodStockPersonDays: string",
+  "nutritionPermille: number",
+  "cohesionPermille: number",
+  "riskPermille: number",
+  "countries: RenderIdentitySnapshot[]",
+  "cities: RenderCitySnapshot[]",
+]) {
   if (!types.includes(fragment)) throw new Error(`Viewer exact/dynamic type missing: ${fragment}`);
 }
 if (!main.includes("export async function advanceViewerDays") || !main.includes("applySnapshot(snapshot)")) {
   throw new Error("Viewer has no reusable dynamic snapshot application path");
 }
 
-console.log("Stage 2.8.0 integration/render hardening contract verified");
+console.log("Stage 2.8.0 integration/render hardening contract verified with Stage 3.1 runtime state");
