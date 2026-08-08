@@ -2,8 +2,15 @@ import * as THREE from "three";
 import type { RenderRegionSnapshot, RenderWorldSnapshot } from "./types";
 import { WorldSpaceTransform } from "./world-space";
 
+type RegionVisual = {
+  line: THREE.LineLoop;
+  signature: string;
+};
+
 export class WorldTopologyLayer {
   private readonly group = new THREE.Group();
+  private readonly visuals = new Map<string, RegionVisual>();
+  private boundsKey = "";
 
   public constructor(scene: THREE.Scene) {
     this.group.name = "world-topology";
@@ -11,15 +18,38 @@ export class WorldTopologyLayer {
   }
 
   public update(world: RenderWorldSnapshot): void {
-    this.clear();
     if (!world.initialized || world.bounds === null) {
+      this.clear();
       return;
     }
 
+    const nextBoundsKey = `${world.bounds.minXM}:${world.bounds.maxXM}:${world.bounds.minZM}:${world.bounds.maxZM}`;
     const transform = new WorldSpaceTransform(world.bounds);
+    const active = new Set<string>();
+
     for (const region of world.regions) {
-      this.group.add(this.createBoundary(region, transform));
+      active.add(region.id);
+      const signature = regionSignature(region, nextBoundsKey);
+      const existing = this.visuals.get(region.id);
+      if (existing?.signature === signature) {
+        continue;
+      }
+      if (existing !== undefined) {
+        disposeLine(existing.line);
+        this.visuals.delete(region.id);
+      }
+      const line = this.createBoundary(region, transform);
+      this.group.add(line);
+      this.visuals.set(region.id, { line, signature });
     }
+
+    for (const [id, visual] of [...this.visuals.entries()]) {
+      if (!active.has(id)) {
+        disposeLine(visual.line);
+        this.visuals.delete(id);
+      }
+    }
+    this.boundsKey = nextBoundsKey;
   }
 
   public dispose(): void {
@@ -45,19 +75,27 @@ export class WorldTopologyLayer {
   }
 
   private clear(): void {
-    for (const child of [...this.group.children]) {
-      child.removeFromParent();
-      if (child instanceof THREE.Line) {
-        child.geometry.dispose();
-        const material = child.material;
-        if (Array.isArray(material)) {
-          for (const item of material) {
-            item.dispose();
-          }
-        } else {
-          material.dispose();
-        }
-      }
+    for (const visual of this.visuals.values()) {
+      disposeLine(visual.line);
     }
+    this.visuals.clear();
+    this.boundsKey = "";
+  }
+}
+
+function regionSignature(region: RenderRegionSnapshot, boundsKey: string): string {
+  return `${boundsKey}|${region.surface}|${region.boundary
+    .map((point) => `${point.xM},${point.zM}`)
+    .join(";")}`;
+}
+
+function disposeLine(line: THREE.Line): void {
+  line.removeFromParent();
+  line.geometry.dispose();
+  const material = line.material;
+  if (Array.isArray(material)) {
+    for (const item of material) item.dispose();
+  } else {
+    material.dispose();
   }
 }
