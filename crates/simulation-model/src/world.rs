@@ -119,6 +119,8 @@ impl RegionRegistry {
         }
     }
 
+    /// # Errors
+    /// Returns [`EntityRegistryError`] when Region IDs or allocator state are invalid.
     pub fn from_records(records: Vec<RegionState>) -> Result<Self, EntityRegistryError> {
         let next_id = records
             .iter()
@@ -131,6 +133,8 @@ impl RegionRegistry {
         Self::from_parts(next_id, records)
     }
 
+    /// # Errors
+    /// Returns [`EntityRegistryError`] for invalid IDs, duplicates, or allocator reuse.
     pub fn from_parts(
         next_id: u64,
         records: Vec<RegionState>,
@@ -153,6 +157,8 @@ impl RegionRegistry {
         Ok(Self { entries, next_id })
     }
 
+    /// # Errors
+    /// Returns [`EntityRegistryError`] for invalid neighbor references or exhausted IDs.
     pub fn create(&mut self, draft: RegionDraft) -> Result<RegionId, EntityRegistryError> {
         if draft.neighbors.windows(2).any(|pair| pair[0] >= pair[1])
             || draft
@@ -191,6 +197,8 @@ impl RegionRegistry {
         Ok(id)
     }
 
+    /// # Errors
+    /// Returns [`EntityRegistryError::UnknownEntity`] when the Region does not exist.
     pub fn remove(&mut self, id: RegionId) -> Result<RegionState, EntityRegistryError> {
         let removed = self
             .entries
@@ -266,12 +274,16 @@ impl WorldSpatialState {
         }
     }
 
+    /// # Errors
+    /// Returns [`WorldSpatialError`] when bounds, topology, or Region geometry is invalid.
     pub fn new(bounds: WorldBounds, regions: Vec<RegionState>) -> Result<Self, WorldSpatialError> {
         let registry = RegionRegistry::from_records(regions)
             .map_err(|_| WorldSpatialError::InvalidRegionRegistry)?;
         Self::from_registry(bounds, registry)
     }
 
+    /// # Errors
+    /// Returns [`WorldSpatialError`] under the same validation rules as [`Self::new`].
     pub fn new_trial(
         bounds: WorldBounds,
         regions: Vec<RegionState>,
@@ -279,6 +291,8 @@ impl WorldSpatialState {
         Self::new(bounds, regions)
     }
 
+    /// # Errors
+    /// Returns [`WorldSpatialError`] when restored topology or Region geometry is invalid.
     pub fn from_registry(
         bounds: WorldBounds,
         regions: RegionRegistry,
@@ -301,6 +315,8 @@ impl WorldSpatialState {
         self.regions.get(id)
     }
 
+    /// # Errors
+    /// Returns [`WorldSpatialError`] for invalid geometry, ownership, references, or allocation.
     pub fn create_region(&mut self, draft: RegionDraft) -> Result<RegionId, WorldSpatialError> {
         let bounds = self
             .bounds
@@ -314,6 +330,8 @@ impl WorldSpatialState {
         Ok(id)
     }
 
+    /// # Errors
+    /// Returns [`WorldSpatialError`] when the Region is absent or removal invalidates topology.
     pub fn remove_region(&mut self, id: RegionId) -> Result<RegionState, WorldSpatialError> {
         if self.regions.len() <= 1 {
             return Err(WorldSpatialError::PartialInitialization);
@@ -326,6 +344,8 @@ impl WorldSpatialState {
         Ok(removed)
     }
 
+    /// # Errors
+    /// Returns [`WorldSpatialError`] when any spatial, adjacency, political, or polygon invariant fails.
     pub fn validate(&self) -> Result<(), WorldSpatialError> {
         match self.bounds {
             None if self.regions.is_empty() => return Ok(()),
