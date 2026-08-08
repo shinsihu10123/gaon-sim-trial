@@ -35,6 +35,7 @@ No item is complete until implementation, permanent Core/Viewer validation and e
 - RenderSnapshot v5 HumanGroup collection with JS-safe string IDs
 - dedicated worldgen, save round-trip and RenderSnapshot acceptance tests
 - permanent Stage 2.6 source contract chained into Viewer CI
+- Stage 2.5 permanent contract generalized to preserve the HumanGroup registry invariant after Stage 2.6 added initialized HumanGroup state
 
 ## Explicit non-goals
 
@@ -48,4 +49,4 @@ No item is complete until implementation, permanent Core/Viewer validation and e
 
 ## Current integration gate
 
-The one-shot source migration and first strict-Clippy documentation normalization have been applied. PR #14 is now running permanent Core and Viewer CI on the integrated implementation. Any remaining failure will be treated as an implementation or acceptance-test defect and corrected before cleanup/evidence.
+The one-shot source migration, structural generator refactor, rustfmt normalization, Stage 2.5 contract compatibility update and strict-Clippy documentation normalization have been applied. PR #14 is being revalidated through permanent Core and Viewer CI on the latest integrated head. Any remaining failure is treated as an implementation or acceptance-test defect and corrected before cleanup/evidence.
