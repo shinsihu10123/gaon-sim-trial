@@ -5,7 +5,7 @@ use simulation_model::{
     BiomeClass, MapPoint, RegionSurface, ReliefClass, TerrainState, WorldBounds, WorldState,
 };
 
-pub const RENDER_SNAPSHOT_VERSION: u32 = 3;
+pub const RENDER_SNAPSHOT_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -185,25 +185,35 @@ impl From<WorldBounds> for RenderWorldBounds {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderRegionSnapshot {
-    pub id: u16,
+    pub id: String,
     pub surface: RenderRegionSurface,
     pub center: RenderMapPoint,
     pub boundary: Vec<RenderMapPoint>,
-    pub neighbors: Vec<u16>,
-    pub legal_owner: Option<u16>,
-    pub controller: Option<u16>,
+    pub neighbors: Vec<String>,
+    pub legal_owner: Option<String>,
+    pub controller: Option<String>,
 }
 
 impl From<&simulation_model::RegionState> for RenderRegionSnapshot {
     fn from(region: &simulation_model::RegionState) -> Self {
         Self {
-            id: region.id.0,
+            id: region.id.0.to_string(),
             surface: region.surface.into(),
             center: region.center.into(),
             boundary: region.boundary.iter().copied().map(Into::into).collect(),
-            neighbors: region.neighbors.iter().map(|neighbor| neighbor.0).collect(),
-            legal_owner: region.political.legal_owner.map(|country| country.0),
-            controller: region.political.controller.map(|country| country.0),
+            neighbors: region
+                .neighbors
+                .iter()
+                .map(|neighbor| neighbor.0.to_string())
+                .collect(),
+            legal_owner: region
+                .political
+                .legal_owner
+                .map(|country| country.0.to_string()),
+            controller: region
+                .political
+                .controller
+                .map(|country| country.0.to_string()),
         }
     }
 }
@@ -253,14 +263,14 @@ mod tests {
     fn sample_spatial_world() -> WorldSpatialState {
         let regions = (1..=TRIAL_REGION_COUNT)
             .map(|index| {
-                let id = RegionId(u16::try_from(index).expect("id fits u16"));
+                let id = RegionId(u64::try_from(index).expect("id fits u64"));
                 let x = i32::try_from(index).expect("index fits i32") * 100;
                 let mut neighbors = Vec::new();
                 if index > 1 {
-                    neighbors.push(RegionId(u16::try_from(index - 1).expect("id fits u16")));
+                    neighbors.push(RegionId(u64::try_from(index - 1).expect("id fits u64")));
                 }
                 if index < TRIAL_REGION_COUNT {
-                    neighbors.push(RegionId(u16::try_from(index + 1).expect("id fits u16")));
+                    neighbors.push(RegionId(u64::try_from(index + 1).expect("id fits u64")));
                 }
                 RegionState {
                     id,
@@ -336,6 +346,6 @@ mod tests {
         assert!(snapshot.world.initialized);
         assert_eq!(snapshot.world.regions.len(), 60);
         assert_eq!(snapshot.world.regions[0].surface, RenderRegionSurface::Land);
-        assert_eq!(snapshot.world.regions[59].id, 60);
+        assert_eq!(snapshot.world.regions[59].id, "60");
     }
 }

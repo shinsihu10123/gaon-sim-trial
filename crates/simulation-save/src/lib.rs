@@ -6,12 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use simulation_model::{
-    CommandExecutionRecord, CommandId, CommandPriority, CommandSource, EventCategory, EventId,
-    EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate, WorldState,
+    CommandExecutionRecord, CommandId, CommandPriority, CommandSource, EntityRegistry,
+    EventCategory, EventId, EventPayload, EventRecord, EventSource, QueuedCommand, SimulationDate,
+    WorldState,
 };
 
-/// Stage 2.4 adds finite resource stocks to authoritative state.
-pub const SAVE_FORMAT_VERSION: u32 = 4;
+/// Stage 2.5 adds dynamic entity registries and stable allocator state.
+pub const SAVE_FORMAT_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -327,6 +328,32 @@ fn validate_world(world: &WorldState) -> Result<(), SaveError> {
             "world spatial state violates Stage 2.1 topology invariants",
         ));
     }
+
+    for region in &world.spatial.regions {
+        for country in [region.political.legal_owner, region.political.controller]
+            .into_iter()
+            .flatten()
+        {
+            if !world.entities.countries.contains(country) {
+                return Err(SaveError::SnapshotInvariant(
+                    "Region references an unknown active country",
+                ));
+            }
+        }
+    }
+    for city in world.entities.cities.iter() {
+        if city
+            .country
+            .is_some_and(|country| !world.entities.countries.contains(country))
+            || city
+                .region
+                .is_some_and(|region| world.spatial.region(region).is_none())
+        {
+            return Err(SaveError::SnapshotInvariant(
+                "City references an unknown active entity",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -423,6 +450,36 @@ fn validate_events(
                 }
                 validate_command_event_attribution(event, *source)?;
             }
+            EventPayload::EntityCreated { entity } | EventPayload::EntityRemoved { entity } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                    || !entity.id.is_valid()
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity lifecycle event attribution is invalid",
+                    ));
+                }
+            }
+            EventPayload::EntityTransitioned { from, to } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                    || !from.id.is_valid()
+                    || !to.id.is_valid()
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity transition event attribution is invalid",
+                    ));
+                }
+            }
+            EventPayload::EntityMutationRejected { .. } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity mutation rejection attribution is invalid",
+                    ));
+                }
+            }
         }
     }
 
@@ -445,6 +502,9 @@ fn validate_command_event_attribution(
     command_source: CommandSource,
 ) -> Result<(), SaveError> {
     let valid = match command_source {
+        CommandSource::System => {
+            event.category == EventCategory::System && event.source == EventSource::System
+        }
         CommandSource::User => {
             event.category == EventCategory::UserIntervention && event.source == EventSource::User
         }

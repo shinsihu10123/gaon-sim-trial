@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod entity_lifecycle;
 mod event_ledger;
 
 use std::time::Duration;
@@ -145,6 +146,9 @@ impl SimulationEngine {
     /// Returns [`CommandError`] when a scheduled date is invalid, is already in
     /// the past, or no further deterministic command identifiers can be issued.
     pub fn submit_command(&mut self, request: CommandRequest) -> Result<CommandId, CommandError> {
+        if request.payload.is_entity_lifecycle() && request.source != CommandSource::System {
+            return Err(CommandError::InvalidSourceForPayload);
+        }
         let execute_on = self.resolve_execution_date(request.timing)?;
         let id = CommandId(self.next_command_id);
         self.next_command_id = self
@@ -166,6 +170,18 @@ impl SimulationEngine {
             .sort_by_key(|queued| (queued.execute_on, queued.priority, queued.id));
 
         Ok(id)
+    }
+
+    /// Submits a system-originated deterministic lifecycle command.
+    ///
+    /// # Errors
+    /// Returns [`CommandError`] under the same scheduling rules as other commands.
+    pub fn submit_system_command(
+        &mut self,
+        timing: CommandTiming,
+        payload: CommandPayload,
+    ) -> Result<CommandId, CommandError> {
+        self.submit_command(CommandRequest::system(timing, payload))
     }
 
     /// Submits a user-originated command using the user intervention priority.
@@ -241,16 +257,41 @@ impl SimulationEngine {
         let command_id = command.id;
         let command_source = command.source;
 
-        match &command.payload {
-            CommandPayload::NoOp { .. } => {}
-        }
+        let lifecycle_result = self.apply_entity_payload(&command.payload);
 
         self.executed_commands.push(CommandExecutionRecord {
             command,
             executed_on,
         });
 
+        match lifecycle_result {
+            Ok(Some(payload)) => {
+                self.event_ledger.append(
+                    executed_on,
+                    self.state.elapsed_days,
+                    EventDraft {
+                        category: EventCategory::EntityLifecycle,
+                        source: EventSource::System,
+                        payload,
+                    },
+                );
+            }
+            Ok(None) => {}
+            Err(error) => {
+                self.event_ledger.append(
+                    executed_on,
+                    self.state.elapsed_days,
+                    EventDraft {
+                        category: EventCategory::EntityLifecycle,
+                        source: EventSource::System,
+                        payload: EventPayload::EntityMutationRejected { error },
+                    },
+                );
+            }
+        }
+
         let (category, source) = match command_source {
+            CommandSource::System => (EventCategory::System, EventSource::System),
             CommandSource::User => (EventCategory::UserIntervention, EventSource::User),
             CommandSource::CountryAi(country_id) => {
                 (EventCategory::System, EventSource::Country(country_id))

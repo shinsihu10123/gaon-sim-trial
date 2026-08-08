@@ -44,8 +44,9 @@ for (const fragment of [
   }
 }
 
-if (!save.includes("SAVE_FORMAT_VERSION: u32 = 4")) {
-  throw new Error("Stage 2.4 save format is not version 4");
+const versionMatch = save.match(/pub const SAVE_FORMAT_VERSION: u32 = (\d+)/);
+if (versionMatch === null || Number(versionMatch[1]) < 4) {
+  throw new Error("Stage 2.4 requires save format v4 or newer");
 }
 for (const fragment of ["write_resource_field", "read_resource_field", "remaining_quantity"]) {
   if (!binary.includes(fragment)) {
@@ -65,4 +66,4 @@ for (const fragment of ["extract", "state_binary", "decode_bundle", "assert_eq!(
   }
 }
 
-console.log("Stage 2.4 resource contract verified");
+console.log(`Stage 2.4 resource contract verified on save format v${versionMatch[1]}`);

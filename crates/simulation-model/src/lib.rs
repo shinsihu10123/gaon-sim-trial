@@ -1,11 +1,19 @@
 #![forbid(unsafe_code)]
 
+mod entity;
 mod event;
 mod resources;
 mod terrain;
 mod terrain_effects;
 mod world;
 
+pub use entity::{
+    CityEntity, CityId, CityRegistry, CommunityEntity, CommunityId, CommunityRegistry,
+    CountryEntity, CountryId, CountryRegistry, EntityKind, EntityRef, EntityRegistry,
+    EntityRegistryError, EntityWorldState, HumanGroupEntity, HumanGroupId, HumanGroupRegistry,
+    PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, RegionId, SettlementEntity,
+    SettlementId, SettlementRegistry, StableEntityId,
+};
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
 pub use resources::{
     food_capacity_from_terrain_effects, ExtractionResult, ResourceAggregate, ResourceCellState,
@@ -18,17 +26,9 @@ pub use terrain::{
 };
 pub use terrain_effects::{derive_terrain_effects, TerrainEffectField, TerrainEffects};
 pub use world::{
-    MapPoint, RegionPoliticalState, RegionState, RegionSurface, WorldBounds, WorldSpatialError,
-    WorldSpatialState, TRIAL_REGION_COUNT,
+    MapPoint, RegionDraft, RegionPoliticalState, RegionRegistry, RegionState, RegionSurface,
+    WorldBounds, WorldSpatialError, WorldSpatialState, TRIAL_REGION_COUNT,
 };
-
-/// Stable identifier for a country in the trial simulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CountryId(pub u16);
-
-/// Stable identifier for a region in the trial simulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RegionId(pub u16);
 
 /// Calendar boundary information produced after one simulated day advances.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -129,6 +129,7 @@ pub struct CommandId(pub u64);
 /// Origin of an accepted simulation command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CommandSource {
+    System,
     User,
     CountryAi(CountryId),
 }
@@ -150,6 +151,7 @@ pub enum CommandTiming {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum CommandPriority {
+    System = 0,
     UserIntervention = 10,
     CountryAi = 20,
 }
@@ -158,21 +160,125 @@ impl CommandPriority {
     #[must_use]
     pub const fn for_source(source: CommandSource) -> Self {
         match source {
+            CommandSource::System => Self::System,
             CommandSource::User => Self::UserIntervention,
             CommandSource::CountryAi(_) => Self::CountryAi,
         }
     }
 }
 
-/// Extensible payload carried by the Stage 1 command infrastructure.
-///
-/// Domain commands for policy, diplomacy and military control are deliberately
-/// not invented in Stage 1. `NoOp` is retained as an infrastructure health
-/// probe so scheduling, ordering, logging and replay can be validated before
-/// those domain systems exist.
+/// Extensible payload carried by the deterministic command infrastructure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CommandPayload {
-    NoOp { token: u64 },
+    NoOp {
+        token: u64,
+    },
+    CreateHumanGroupEntity,
+    RemoveHumanGroupEntity {
+        human_group_id: HumanGroupId,
+    },
+    CreateSettlementEntity,
+    RemoveSettlementEntity {
+        settlement_id: SettlementId,
+    },
+    CreateCommunityEntity,
+    RemoveCommunityEntity {
+        community_id: CommunityId,
+    },
+    CreatePoliticalEntity,
+    RemovePoliticalEntity {
+        political_entity_id: PoliticalEntityId,
+    },
+    PromotePoliticalEntityToCountry {
+        political_entity_id: PoliticalEntityId,
+    },
+    CreateCountryEntity,
+    RemoveCountryEntity {
+        country_id: CountryId,
+    },
+    CreateCityEntity {
+        country_id: Option<CountryId>,
+        region_id: Option<RegionId>,
+    },
+    RemoveCityEntity {
+        city_id: CityId,
+    },
+    CreateRegionEntity {
+        draft: RegionDraft,
+    },
+    RemoveRegionEntity {
+        region_id: RegionId,
+    },
+}
+
+impl CommandPayload {
+    #[must_use]
+    pub const fn is_entity_lifecycle(&self) -> bool {
+        !matches!(self, Self::NoOp { .. })
+    }
+
+    #[must_use]
+    pub fn references_country(&self, country_id: CountryId) -> bool {
+        match self {
+            Self::RemoveCountryEntity {
+                country_id: referenced,
+            }
+            | Self::CreateCityEntity {
+                country_id: Some(referenced),
+                ..
+            } => *referenced == country_id,
+            Self::CreateRegionEntity { draft } => {
+                draft.political.legal_owner == Some(country_id)
+                    || draft.political.controller == Some(country_id)
+            }
+            Self::NoOp { .. }
+            | Self::CreateHumanGroupEntity
+            | Self::RemoveHumanGroupEntity { .. }
+            | Self::CreateSettlementEntity
+            | Self::RemoveSettlementEntity { .. }
+            | Self::CreateCommunityEntity
+            | Self::RemoveCommunityEntity { .. }
+            | Self::CreatePoliticalEntity
+            | Self::RemovePoliticalEntity { .. }
+            | Self::PromotePoliticalEntityToCountry { .. }
+            | Self::CreateCountryEntity
+            | Self::CreateCityEntity {
+                country_id: None, ..
+            }
+            | Self::RemoveCityEntity { .. }
+            | Self::RemoveRegionEntity { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn references_region(&self, region_id: RegionId) -> bool {
+        match self {
+            Self::CreateCityEntity {
+                region_id: Some(referenced),
+                ..
+            }
+            | Self::RemoveRegionEntity {
+                region_id: referenced,
+            } => *referenced == region_id,
+            Self::CreateRegionEntity { draft } => draft.neighbors.contains(&region_id),
+            Self::NoOp { .. }
+            | Self::CreateHumanGroupEntity
+            | Self::RemoveHumanGroupEntity { .. }
+            | Self::CreateSettlementEntity
+            | Self::RemoveSettlementEntity { .. }
+            | Self::CreateCommunityEntity
+            | Self::RemoveCommunityEntity { .. }
+            | Self::CreatePoliticalEntity
+            | Self::RemovePoliticalEntity { .. }
+            | Self::PromotePoliticalEntityToCountry { .. }
+            | Self::CreateCountryEntity
+            | Self::RemoveCountryEntity { .. }
+            | Self::CreateCityEntity {
+                region_id: None, ..
+            }
+            | Self::RemoveCityEntity { .. } => false,
+        }
+    }
 }
 
 /// Command request before the core assigns identity, resolved date and
@@ -185,6 +291,15 @@ pub struct CommandRequest {
 }
 
 impl CommandRequest {
+    #[must_use]
+    pub const fn system(timing: CommandTiming, payload: CommandPayload) -> Self {
+        Self {
+            source: CommandSource::System,
+            timing,
+            payload,
+        }
+    }
+
     #[must_use]
     pub const fn user(timing: CommandTiming, payload: CommandPayload) -> Self {
         Self {
@@ -237,6 +352,7 @@ pub enum CommandError {
         current: SimulationDate,
     },
     CommandIdExhausted,
+    InvalidSourceForPayload,
 }
 
 impl core::fmt::Display for CommandError {
@@ -258,6 +374,9 @@ impl core::fmt::Display for CommandError {
                 current.day
             ),
             Self::CommandIdExhausted => formatter.write_str("command identifier space exhausted"),
+            Self::InvalidSourceForPayload => {
+                formatter.write_str("entity lifecycle payloads require system command source")
+            }
         }
     }
 }
@@ -273,6 +392,7 @@ pub struct WorldState {
     pub terrain: Option<TerrainState>,
     pub resources: Option<ResourceFieldState>,
     pub spatial: WorldSpatialState,
+    pub entities: EntityWorldState,
 }
 
 impl WorldState {
@@ -285,6 +405,14 @@ impl WorldState {
             terrain: None,
             resources: None,
             spatial: WorldSpatialState::uninitialized(),
+            entities: EntityWorldState {
+                human_groups: HumanGroupRegistry::new(),
+                settlements: SettlementRegistry::new(),
+                communities: CommunityRegistry::new(),
+                political_entities: PoliticalEntityRegistry::new(),
+                countries: CountryRegistry::new(),
+                cities: CityRegistry::new(),
+            },
         }
     }
 }
@@ -293,11 +421,11 @@ impl WorldState {
 mod tests {
     use super::{
         CommandPayload, CommandPriority, CommandRequest, CommandSource, CommandTiming, CountryId,
-        DateBoundary, SimulationDate, WorldState,
+        DateBoundary, EntityRegistry, SimulationDate, WorldState,
     };
 
     #[test]
-    fn start_state_is_stable() {
+    fn start_state_is_stable_and_pre_state() {
         let world = WorldState::new(42);
         assert_eq!(world.date, SimulationDate::START);
         assert_eq!(world.elapsed_days, 0);
@@ -306,6 +434,12 @@ mod tests {
         assert!(world.resources.is_none());
         assert!(!world.spatial.is_initialized());
         assert!(world.spatial.regions.is_empty());
+        assert!(world.entities.human_groups.is_empty());
+        assert!(world.entities.settlements.is_empty());
+        assert!(world.entities.communities.is_empty());
+        assert!(world.entities.political_entities.is_empty());
+        assert!(world.entities.countries.is_empty());
+        assert!(world.entities.cities.is_empty());
     }
 
     #[test]

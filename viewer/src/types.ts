@@ -36,13 +36,13 @@ export interface RenderMapPoint {
 }
 
 export interface RenderRegionSnapshot {
-  id: number;
+  id: string;
   surface: RegionSurface;
   center: RenderMapPoint;
   boundary: RenderMapPoint[];
-  neighbors: number[];
-  legalOwner: number | null;
-  controller: number | null;
+  neighbors: string[];
+  legalOwner: string | null;
+  controller: string | null;
 }
 
 export interface RenderWorldSnapshot {
