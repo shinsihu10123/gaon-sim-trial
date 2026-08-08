@@ -11,9 +11,10 @@ pub use entity::{
     CityEntity, CityId, CityRegistry, CommunityEntity, CommunityId, CommunityRegistry,
     CountryEntity, CountryId, CountryRegistry, EntityKind, EntityRef, EntityRegistry,
     EntityRegistryError, EntityWorldState, HumanGroupBehaviorProfile, HumanGroupEntity,
-    HumanGroupId, HumanGroupInitialState, HumanGroupRegistry, InitialKnowledgeProfile,
-    KnowledgeSeedValue, PoliticalEntity, PoliticalEntityId, PoliticalEntityRegistry, RegionId,
-    SettlementEntity, SettlementId, SettlementRegistry, StableEntityId,
+    HumanGroupId, HumanGroupInitialState, HumanGroupLineage, HumanGroupRegistry, HumanGroupState,
+    InitialKnowledgeProfile, KnowledgeSeedValue, KnowledgeStateRef, MemoryStateRef, PoliticalEntity,
+    PoliticalEntityId, PoliticalEntityRegistry, RegionId, SettlementEntity, SettlementId,
+    SettlementRegistry, StableEntityId,
 };
 pub use event::{EventCategory, EventFilter, EventId, EventPayload, EventRecord, EventSource};
 pub use resources::{
