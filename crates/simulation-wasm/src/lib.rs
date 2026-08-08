@@ -3,7 +3,9 @@
 use simulation_core::SimulationEngine;
 use simulation_protocol::RenderSnapshot;
 use simulation_save::{create_bundle, SaveKind};
-use simulation_worldgen::{generate_trial_resources, generate_trial_terrain};
+use simulation_worldgen::{
+    generate_trial_civilization_origin_world, trial_preview_human_group_config,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -13,29 +15,27 @@ pub struct SimulationWasm {
 
 #[wasm_bindgen]
 impl SimulationWasm {
-    /// Creates the browser-owned authoritative engine and its deterministic
-    /// Stage 2.2 terrain.
+    /// Creates the browser-owned authoritative engine from the shared
+    /// civilization-origin preview bootstrap.
     ///
     /// A 16-digit hexadecimal seed avoids JavaScript's lossy 53-bit integer
     /// conversion for arbitrary Rust `u64` seeds.
     ///
     /// # Errors
-    ///
-    /// Returns a JavaScript error when seed parsing, terrain generation,
+    /// Returns a JavaScript error when seed parsing, world generation,
     /// authoritative snapshot validation or engine restoration fails.
     #[wasm_bindgen(constructor)]
     pub fn new(seed_hex: &str) -> Result<SimulationWasm, JsValue> {
         let seed = parse_seed_hex(seed_hex).map_err(|message| JsValue::from_str(&message))?;
-        let terrain =
-            generate_trial_terrain(seed).map_err(|error| JsValue::from_str(&error.to_string()))?;
-
-        let resources = generate_trial_resources(seed, &terrain)
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let world = generate_trial_civilization_origin_world(
+            seed,
+            &trial_preview_human_group_config(),
+        )
+        .map_err(|error| JsValue::from_str(&error.to_string()))?;
 
         let engine = SimulationEngine::new(seed);
         let mut snapshot = engine.export_snapshot();
-        snapshot.world.resources = Some(resources);
-        snapshot.world.terrain = Some(terrain);
+        snapshot.world = world;
         let bundle = create_bundle(&snapshot, SaveKind::Manual)
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
         let engine = SimulationEngine::from_save_bundle(&bundle)
@@ -44,32 +44,23 @@ impl SimulationWasm {
         Ok(Self { engine })
     }
 
-    /// Serializes the current renderer-facing snapshot.
-    ///
-    /// # Errors
-    ///
-    /// Returns a JavaScript error when the authoritative digest or JSON
-    /// serialization cannot be produced.
+    /// Serializes a complete renderer-facing snapshot, including immutable terrain.
     #[wasm_bindgen(js_name = snapshotJson)]
     pub fn snapshot_json(&self) -> Result<String, JsValue> {
-        self.encode_snapshot()
+        self.encode_snapshot(true)
     }
 
-    /// Advances the authoritative engine and returns the resulting snapshot.
-    ///
-    /// # Errors
-    ///
-    /// Returns a JavaScript error when the resulting authoritative digest or
-    /// JSON serialization cannot be produced.
+    /// Advances the authoritative engine and returns a dynamic frame. Immutable
+    /// terrain is omitted after initialization and retained by the Viewer bridge.
     #[wasm_bindgen(js_name = advanceDays)]
     pub fn advance_days(&mut self, days: u32) -> Result<String, JsValue> {
         self.engine.advance_days(u64::from(days));
-        self.encode_snapshot()
+        self.encode_snapshot(false)
     }
 }
 
 impl SimulationWasm {
-    fn encode_snapshot(&self) -> Result<String, JsValue> {
+    fn encode_snapshot(&self, include_terrain: bool) -> Result<String, JsValue> {
         let digest = self
             .engine
             .authoritative_state_digest()
@@ -79,12 +70,21 @@ impl SimulationWasm {
             .pending_commands()
             .len()
             .saturating_add(self.engine.command_log().len());
-        let snapshot = RenderSnapshot::from_world(
-            self.engine.state(),
-            command_count,
-            self.engine.event_log().len(),
-            digest,
-        );
+        let snapshot = if include_terrain {
+            RenderSnapshot::from_world(
+                self.engine.state(),
+                command_count,
+                self.engine.event_log().len(),
+                digest,
+            )
+        } else {
+            RenderSnapshot::from_world_dynamic(
+                self.engine.state(),
+                command_count,
+                self.engine.event_log().len(),
+                digest,
+            )
+        };
         serde_json::to_string(&snapshot).map_err(|error| JsValue::from_str(&error.to_string()))
     }
 }
@@ -99,8 +99,11 @@ fn parse_seed_hex(seed_hex: &str) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use simulation_core::SimulationEngine;
+    use simulation_model::EntityRegistry;
     use simulation_save::{create_bundle, SaveKind};
-    use simulation_worldgen::{generate_trial_resources, generate_trial_terrain};
+    use simulation_worldgen::{
+        generate_trial_civilization_origin_world, trial_preview_human_group_config,
+    };
 
     use super::parse_seed_hex;
 
@@ -113,17 +116,20 @@ mod tests {
     }
 
     #[test]
-    fn generated_terrain_can_become_authoritative_engine_state() {
+    fn shared_bootstrap_can_become_authoritative_engine_state() {
         let seed = 2026;
         let mut snapshot = SimulationEngine::new(seed).export_snapshot();
-        let terrain = generate_trial_terrain(seed).expect("terrain generates");
-        snapshot.world.resources =
-            Some(generate_trial_resources(seed, &terrain).expect("resources generate"));
-        snapshot.world.terrain = Some(terrain);
+        snapshot.world = generate_trial_civilization_origin_world(
+            seed,
+            &trial_preview_human_group_config(),
+        )
+        .expect("world generates");
         let bundle = create_bundle(&snapshot, SaveKind::Manual).expect("snapshot saves");
         let restored = SimulationEngine::from_save_bundle(&bundle).expect("engine restores");
         assert!(restored.state().terrain.is_some());
         assert!(restored.state().resources.is_some());
+        assert_eq!(restored.state().spatial.regions.len(), 60);
+        assert_eq!(restored.state().entities.human_groups.len(), 8);
         assert_eq!(restored.state().seed, seed);
     }
 }
