@@ -139,7 +139,10 @@ export class EntitySelectionLayer {
     this.targets.set(key, target);
     this.regions.set(region.id, region);
 
-    const signature = region.boundary.map((point) => `${point.xM},${point.zM}`).join(";");
+    const bounds = this.transform.bounds;
+    const signature = `${bounds.minXM}:${bounds.maxXM}:${bounds.minZM}:${bounds.maxZM}|${region.boundary
+      .map((point) => `${point.xM},${point.zM}`)
+      .join(";")}`;
     const existing = this.proxies.get(key);
     if (existing?.userData.signature === signature) return key;
     if (existing !== undefined) {
