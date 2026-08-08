@@ -15,7 +15,9 @@ for (const fragment of [
   "typed_entity_id!(CountryId)",
   "typed_entity_id!(RegionId)",
   "typed_entity_id!(CityId)",
-  "identity_registry!(HumanGroupId, HumanGroupEntity, HumanGroupRegistry)",
+  "pub struct HumanGroupEntity",
+  "pub struct HumanGroupRegistry",
+  "impl EntityRegistry for HumanGroupRegistry",
   "identity_registry!(SettlementId, SettlementEntity, SettlementRegistry)",
   "identity_registry!(CommunityId, CommunityEntity, CommunityRegistry)",
   "PoliticalEntityRegistry",
@@ -106,7 +108,7 @@ for (const fragment of [
   }
 }
 
-for (const forbidden of ["COUNTRY_COUNT =", "const COUNTRY_COUNT"] ) {
+for (const forbidden of ["COUNTRY_COUNT =", "const COUNTRY_COUNT"]) {
   if (model.includes(forbidden) || entity.includes(forbidden)) {
     throw new Error(`fixed Country-count invariant is forbidden: ${forbidden}`);
   }
