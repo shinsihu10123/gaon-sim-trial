@@ -148,7 +148,9 @@ pub struct HumanGroupLineage {
 impl HumanGroupLineage {
     #[must_use]
     pub fn is_valid_for(&self, id: HumanGroupId) -> bool {
-        let direct_refs_valid = self.parent.is_none_or(|parent| parent.0 != 0 && parent != id)
+        let direct_refs_valid = self
+            .parent
+            .is_none_or(|parent| parent.0 != 0 && parent != id)
             && self
                 .split_from
                 .is_none_or(|source| source.0 != 0 && source != id);
@@ -156,10 +158,7 @@ impl HumanGroupLineage {
             .merged_from
             .iter()
             .all(|source| source.0 != 0 && *source != id)
-            && self
-                .merged_from
-                .windows(2)
-                .all(|pair| pair[0] < pair[1]);
+            && self.merged_from.windows(2).all(|pair| pair[0] < pair[1]);
         direct_refs_valid && merged_refs_valid
     }
 }
