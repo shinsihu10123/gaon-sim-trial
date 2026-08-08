@@ -3,6 +3,11 @@ from pathlib import Path
 path = Path("crates/simulation-save/src/binary.rs")
 text = path.read_text()
 
+# The one-shot migration is intentionally idempotent because PR synchronize
+# events can rerun the temporary workflow while Stage 2.5 is being finalized.
+if "HumanGroupRegistry" in text and '"human_groups"' in text:
+    raise SystemExit(0)
+
 replacements = [
     (
         """use simulation_model::{
