@@ -46,12 +46,14 @@ fn zero_country_world_exposes_initialized_human_group_snapshot() {
     assert!(world.entities.countries.is_empty());
 
     let snapshot = RenderSnapshot::from_world(&world, 0, 0, 0x55);
-    assert_eq!(RENDER_SNAPSHOT_VERSION, 5);
+    assert_eq!(RENDER_SNAPSHOT_VERSION, 6);
     assert_eq!(snapshot.world.human_groups.len(), 1);
     let group = &snapshot.world.human_groups[0];
     assert_eq!(group.id, id.0.to_string());
     assert_eq!(group.region_id, "1");
-    assert_eq!(group.population, 1_234);
+    assert_eq!(group.population, "1234");
+    assert_eq!(group.food_stock_person_days, "37020");
+    assert_eq!(group.basic_resource_stock_units, "4000");
     assert_eq!(group.x_m, 500);
     assert_eq!(group.z_m, 500);
     assert_eq!(group.mobility_permille, 350);
