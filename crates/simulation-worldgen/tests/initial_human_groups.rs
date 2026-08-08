@@ -1,6 +1,7 @@
 use simulation_model::{
-    derive_terrain_effects, EntityRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile, MapPoint,
-    RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
+    derive_terrain_effects, EntityRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile,
+    MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState,
+    WorldState,
 };
 use simulation_worldgen::{
     generate_initial_human_groups, generate_trial_resources, generate_trial_terrain,
@@ -57,8 +58,14 @@ fn groups_use_distinct_habitable_regions_and_valid_initial_stocks() {
         assert_eq!(state.region_id, initial.region_id);
         assert_eq!(state.population, initial.population);
         assert_eq!(state.mobility_permille, initial.behavior.mobility_permille);
-        assert_eq!(state.nutrition_permille, config.runtime_seed.nutrition_permille);
-        assert_eq!(state.cohesion_permille, config.runtime_seed.cohesion_permille);
+        assert_eq!(
+            state.nutrition_permille,
+            config.runtime_seed.nutrition_permille
+        );
+        assert_eq!(
+            state.cohesion_permille,
+            config.runtime_seed.cohesion_permille
+        );
         assert_eq!(state.risk_permille, config.runtime_seed.risk_permille);
     }
 }
