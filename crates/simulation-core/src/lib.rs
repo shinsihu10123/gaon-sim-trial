@@ -2,6 +2,7 @@
 
 mod entity_lifecycle;
 mod event_ledger;
+mod population_survival;
 
 use std::time::Duration;
 
@@ -312,13 +313,14 @@ impl SimulationEngine {
     /// Advances exactly one simulated day.
     ///
     /// Commands effective on the current date are executed first, in the fixed
-    /// order `(date, priority, command id)`. The calendar then advances by one
-    /// day. This prevents mid-tick command mutation and keeps paused user
-    /// interventions deterministic: an immediate command means "effective on
-    /// the current simulated date at the next daily tick".
+    /// order `(date, priority, command id)`. HumanGroup population/survival is
+    /// then advanced once from authoritative runtime state before the calendar
+    /// moves to the next day. This keeps demographic outcomes independent of
+    /// renderer cadence and real-time playback speed.
     pub fn tick(&mut self) -> TickReport {
         let events_before = self.event_ledger.records().len();
         let commands_executed = self.execute_due_commands();
+        let _population_report = population_survival::advance_population_survival(&mut self.state);
         let events_emitted = self
             .event_ledger
             .records()
