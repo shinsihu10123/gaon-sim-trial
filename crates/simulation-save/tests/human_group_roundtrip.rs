@@ -1,6 +1,7 @@
 use simulation_model::{
-    derive_terrain_effects, EntityRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile, MapPoint,
-    RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState, WorldState,
+    derive_terrain_effects, EntityRegistry, HumanGroupRuntimeSeed, InitialKnowledgeProfile,
+    MapPoint, RegionId, RegionPoliticalState, RegionState, RegionSurface, WorldSpatialState,
+    WorldState,
 };
 use simulation_save::{
     create_bundle, decode_bundle, EngineSnapshot, SaveKind, SAVE_FORMAT_VERSION,
