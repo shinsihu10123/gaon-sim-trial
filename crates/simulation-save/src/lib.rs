@@ -460,6 +460,17 @@ fn validate_events(
                     ));
                 }
             }
+            EventPayload::EntityTransitioned { from, to } => {
+                if event.category != EventCategory::EntityLifecycle
+                    || event.source != EventSource::System
+                    || !from.id.is_valid()
+                    || !to.id.is_valid()
+                {
+                    return Err(SaveError::SnapshotInvariant(
+                        "entity transition event attribution is invalid",
+                    ));
+                }
+            }
             EventPayload::EntityMutationRejected { .. } => {
                 if event.category != EventCategory::EntityLifecycle
                     || event.source != EventSource::System
