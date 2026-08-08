@@ -1,0 +1,46 @@
+name: Stage 3 Clippy Helper
+
+on:
+  push:
+    branches: [feature/stage-3-1-human-group-state-model]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stage-3-1-human-group-state-model
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Apply MSRV and documentation fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('crates/simulation-model/src/entity.rs')
+          s = p.read_text()
+          s = s.replace('later KnowledgeState system', 'later `KnowledgeState` system')
+          s = s.replace('Canonical HumanGroup ancestry', 'Canonical `HumanGroup` ancestry')
+          s = s.replace('authoritative HumanGroup runtime-state schema', 'authoritative `HumanGroup` runtime-state schema')
+          s = s.replace('.is_none_or(|parent| parent.0 != 0 && parent != id)', '.map_or(true, |parent| parent.0 != 0 && parent != id)')
+          s = s.replace('.is_none_or(|source| source.0 != 0 && source != id)', '.map_or(true, |source| source.0 != 0 && source != id)')
+          s = s.replace('self.knowledge_ref.is_none_or(KnowledgeStateRef::is_valid)', 'self.knowledge_ref.map_or(true, KnowledgeStateRef::is_valid)')
+          s = s.replace('self.memory_ref.is_none_or(MemoryStateRef::is_valid)', 'self.memory_ref.map_or(true, MemoryStateRef::is_valid)')
+          p.write_text(s)
+          PY
+          cargo fmt --all
+      - name: Commit fixes when needed
+        run: |
+          if git diff --quiet; then
+            echo "No changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/simulation-model/src/entity.rs
+          git commit -m "fix: satisfy Stage 3.1 MSRV and clippy contracts"
+          git push origin HEAD:feature/stage-3-1-human-group-state-model
