@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import type { RenderTerrainSnapshot, RenderWorldBounds } from "./types";
+import { WorldSpaceTransform } from "./world-space";
 
-const WORLD_DISPLAY_SIZE = 80;
-const VERTICAL_EXAGGERATION = 8;
 const NO_DOWNSTREAM_INDEX = 0xffffffff;
 
 export class TerrainLayer {
@@ -32,13 +31,7 @@ export class TerrainLayer {
       throw new Error("terrain snapshot arrays do not match grid dimensions");
     }
 
-    const extentX = bounds.maxXM - bounds.minXM;
-    const extentZ = bounds.maxZM - bounds.minZM;
-    const horizontalScale = WORLD_DISPLAY_SIZE / Math.max(extentX, extentZ, 1);
-    const verticalScale = horizontalScale * VERTICAL_EXAGGERATION;
-    const centerX = (bounds.minXM + bounds.maxXM) / 2;
-    const centerZ = (bounds.minZM + bounds.maxZM) / 2;
-
+    const transform = new WorldSpaceTransform(bounds);
     const positions = new Float32Array(sampleCount * 3);
     const colors = new Float32Array(sampleCount * 3);
     const color = new THREE.Color();
@@ -49,10 +42,15 @@ export class TerrainLayer {
         const offset = index * 3;
         const xM = bounds.minXM + x * terrain.spacingM;
         const zM = bounds.minZM + z * terrain.spacingM;
+        const point = transform.worldPointToScene(
+          xM,
+          zM,
+          transform.elevationToSceneY(terrain.elevationM[index] ?? 0),
+        );
 
-        positions[offset] = (xM - centerX) * horizontalScale;
-        positions[offset + 1] = terrain.elevationM[index] * verticalScale;
-        positions[offset + 2] = (zM - centerZ) * horizontalScale;
+        positions[offset] = point.x;
+        positions[offset + 1] = point.y;
+        positions[offset + 2] = point.z;
 
         color.setHex(biomeColor(terrain.biomeCodes[index], terrain.reliefCodes[index]));
         colors[offset] = color.r;
@@ -87,9 +85,10 @@ export class TerrainLayer {
     this.terrainMesh.name = "authoritative-terrain-heightfield";
     this.scene.add(this.terrainMesh);
 
-    const seaWidth = extentX * horizontalScale;
-    const seaHeight = extentZ * horizontalScale;
-    const seaGeometry = new THREE.PlaneGeometry(seaWidth, seaHeight);
+    const seaGeometry = new THREE.PlaneGeometry(
+      transform.extentXM * transform.horizontalScale,
+      transform.extentZM * transform.horizontalScale,
+    );
     const seaMaterial = new THREE.MeshStandardMaterial({
       color: 0x315b74,
       transparent: true,
@@ -100,7 +99,7 @@ export class TerrainLayer {
     });
     this.seaMesh = new THREE.Mesh(seaGeometry, seaMaterial);
     this.seaMesh.rotation.x = -Math.PI / 2;
-    this.seaMesh.position.y = terrain.seaLevelM * verticalScale + 0.015;
+    this.seaMesh.position.y = transform.elevationToSceneY(terrain.seaLevelM) + 0.015;
     this.seaMesh.name = "authoritative-sea-level";
     this.scene.add(this.seaMesh);
 

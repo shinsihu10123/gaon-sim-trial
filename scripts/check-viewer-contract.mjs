@@ -53,3 +53,4 @@ await import("./check-terrain-effects-contract.mjs");
 await import("./check-resource-contract.mjs");
 await import("./check-dynamic-entity-contract.mjs");
 await import("./check-initial-human-groups-contract.mjs");
+await import("./check-camera-selection-contract.mjs");
