@@ -1,6 +1,6 @@
 # Stage 2.6 Initial Human Groups and Ecological Placement
 
-Status: **IN PROGRESS**
+Status: **IN PROGRESS — INTEGRATION VALIDATION**
 
 Authoritative scope: WBS v3.1 civilization-origin revision.
 
@@ -30,9 +30,10 @@ No item is complete until implementation, permanent Core/Viewer validation and e
 - food person-day and basic-resource initialization
 - extensible Knowledge seed-profile container without fixing the final taxonomy
 - pairwise integer distance and contact-radius classification
-- dedicated worldgen acceptance tests
-- Save v6 migration design and round-trip tests
-- RenderSnapshot v5 migration design and zero-country HumanGroup snapshot test
+- authoritative `HumanGroupInitialState` attached to `HumanGroupEntity`
+- Save format v6 serialization and validation for HumanGroup ecological seed state
+- RenderSnapshot v5 HumanGroup collection with JS-safe string IDs
+- dedicated worldgen, save round-trip and RenderSnapshot acceptance tests
 - permanent Stage 2.6 source contract chained into Viewer CI
 
 ## Explicit non-goals
@@ -47,4 +48,4 @@ No item is complete until implementation, permanent Core/Viewer validation and e
 
 ## Current integration gate
 
-The source migration that extends `HumanGroupEntity`, Save v6 and RenderSnapshot v5 has been prepared but is not yet applied to the branch. The next gate applies that migration, runs rustfmt, opens the Stage 2.6 draft PR and uses permanent Core/Viewer CI to identify real integration failures.
+The one-shot migration has been applied to the feature branch. PR #14 now validates the integrated implementation through permanent Core and Viewer CI. The temporary migration workflow/script will be removed before the final evidence head.
