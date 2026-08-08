@@ -1,0 +1,34 @@
+name: Stage 2.5 Civilization Migration PR
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.event.pull_request.head.ref == 'feature/stage-2-5-dynamic-entity' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stage-2-5-dynamic-entity
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Apply civilization-origin migration
+        run: |
+          python3 scripts/migrate-stage2-5-civilization.py
+          cargo fmt --all
+      - name: Commit migration
+        run: |
+          if git diff --quiet; then
+            echo "No migration changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/simulation-save/src/binary.rs crates/simulation-model/src/entity.rs crates/simulation-model/src/lib.rs crates/simulation-core/src/entity_lifecycle.rs
+          git commit -m "Persist civilization-origin dynamic entities"
+          git push origin HEAD:feature/stage-2-5-dynamic-entity
