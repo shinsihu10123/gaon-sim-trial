@@ -24,34 +24,22 @@ fn civilization_origin_entities_exist_before_any_country() {
         engine.tick();
     }
 
-    assert!(
-        engine
-            .state()
-            .entities
-            .human_groups
-            .contains(HumanGroupId(1))
-    );
-    assert!(
-        engine
-            .state()
-            .entities
-            .settlements
-            .contains(SettlementId(1))
-    );
-    assert!(
-        engine
-            .state()
-            .entities
-            .communities
-            .contains(CommunityId(1))
-    );
-    assert!(
-        engine
-            .state()
-            .entities
-            .political_entities
-            .contains(PoliticalEntityId(1))
-    );
+    assert!(engine
+        .state()
+        .entities
+        .human_groups
+        .contains(HumanGroupId(1)));
+    assert!(engine
+        .state()
+        .entities
+        .settlements
+        .contains(SettlementId(1)));
+    assert!(engine.state().entities.communities.contains(CommunityId(1)));
+    assert!(engine
+        .state()
+        .entities
+        .political_entities
+        .contains(PoliticalEntityId(1)));
     assert!(engine.state().entities.countries.is_empty());
 
     let created: Vec<_> = engine
@@ -208,7 +196,8 @@ fn pre_state_save_load_preserves_all_allocators() {
     let bundle = engine
         .save_bundle(SaveKind::Manual)
         .expect("pre-state entity world must save");
-    let mut restored = SimulationEngine::from_save_bundle(&bundle).expect("pre-state save restores");
+    let mut restored =
+        SimulationEngine::from_save_bundle(&bundle).expect("pre-state save restores");
 
     assert_eq!(restored.export_snapshot(), engine.export_snapshot());
     assert_eq!(restored.state().entities.human_groups.next_id(), 3);
@@ -224,13 +213,11 @@ fn pre_state_save_load_preserves_all_allocators() {
         )
         .expect("post-restore group create");
     restored.tick();
-    assert!(
-        restored
-            .state()
-            .entities
-            .human_groups
-            .contains(HumanGroupId(3))
-    );
+    assert!(restored
+        .state()
+        .entities
+        .human_groups
+        .contains(HumanGroupId(3)));
 }
 
 #[test]
@@ -276,13 +263,11 @@ fn political_entity_can_transition_to_country_without_predefining_emergence_caus
         )
         .expect("political entity create");
     engine.tick();
-    assert!(
-        engine
-            .state()
-            .entities
-            .political_entities
-            .contains(PoliticalEntityId(1))
-    );
+    assert!(engine
+        .state()
+        .entities
+        .political_entities
+        .contains(PoliticalEntityId(1)));
     assert!(engine.state().entities.countries.is_empty());
 
     engine
