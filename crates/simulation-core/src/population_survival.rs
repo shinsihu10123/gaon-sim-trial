@@ -86,11 +86,7 @@ pub(crate) fn advance_population_survival(world: &mut WorldState) -> PopulationS
         };
         report.groups_updated = report.groups_updated.saturating_add(1);
 
-        let region_population = before
-            .by_region
-            .get(&state.region_id)
-            .copied()
-            .unwrap_or(0);
+        let region_population = before.by_region.get(&state.region_id).copied().unwrap_or(0);
         let carrying_capacity = terrain_effects.as_ref().and_then(|effects| {
             carrying_capacity_for_region(
                 world,
