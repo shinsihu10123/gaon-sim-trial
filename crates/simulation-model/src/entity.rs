@@ -38,6 +38,10 @@ macro_rules! typed_entity_id {
     };
 }
 
+typed_entity_id!(HumanGroupId);
+typed_entity_id!(SettlementId);
+typed_entity_id!(CommunityId);
+typed_entity_id!(PoliticalEntityId);
 typed_entity_id!(CountryId);
 typed_entity_id!(RegionId);
 typed_entity_id!(CityId);
@@ -47,6 +51,10 @@ pub enum EntityKind {
     Country,
     Region,
     City,
+    HumanGroup,
+    Settlement,
+    Community,
+    PoliticalEntity,
 }
 
 /// Type-tagged identity used by Event Ledger and generic reference diagnostics.
@@ -57,6 +65,38 @@ pub struct EntityRef {
 }
 
 impl EntityRef {
+    #[must_use]
+    pub const fn human_group(id: HumanGroupId) -> Self {
+        Self {
+            kind: EntityKind::HumanGroup,
+            id: id.stable(),
+        }
+    }
+
+    #[must_use]
+    pub const fn settlement(id: SettlementId) -> Self {
+        Self {
+            kind: EntityKind::Settlement,
+            id: id.stable(),
+        }
+    }
+
+    #[must_use]
+    pub const fn community(id: CommunityId) -> Self {
+        Self {
+            kind: EntityKind::Community,
+            id: id.stable(),
+        }
+    }
+
+    #[must_use]
+    pub const fn political_entity(id: PoliticalEntityId) -> Self {
+        Self {
+            kind: EntityKind::PoliticalEntity,
+            id: id.stable(),
+        }
+    }
+
     #[must_use]
     pub const fn country(id: CountryId) -> Self {
         Self {
@@ -132,102 +172,111 @@ pub trait EntityRegistry {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CountryEntity {
-    pub id: CountryId,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CountryRegistry {
-    entries: BTreeMap<CountryId, CountryEntity>,
-    next_id: u64,
-}
-
-impl CountryRegistry {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            entries: BTreeMap::new(),
-            next_id: StableEntityId::FIRST.0,
+macro_rules! identity_registry {
+    ($id:ident, $record:ident, $registry:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $record {
+            pub id: $id,
         }
-    }
 
-    /// Restores a registry from canonical persisted parts.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EntityRegistryError`] for zero/duplicate IDs, record-key
-    /// disagreement, or a non-monotonic next identifier.
-    pub fn from_parts(
-        next_id: u64,
-        records: Vec<CountryEntity>,
-    ) -> Result<Self, EntityRegistryError> {
-        let mut entries = BTreeMap::new();
-        for record in records {
-            if record.id.0 == 0 {
-                return Err(EntityRegistryError::InvalidId);
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $registry {
+            entries: BTreeMap<$id, $record>,
+            next_id: u64,
+        }
+
+        impl $registry {
+            #[must_use]
+            pub const fn new() -> Self {
+                Self {
+                    entries: BTreeMap::new(),
+                    next_id: StableEntityId::FIRST.0,
+                }
             }
-            if entries.insert(record.id, record).is_some() {
-                return Err(EntityRegistryError::DuplicateId);
+
+            /// Restores a registry from canonical persisted parts.
+            ///
+            /// # Errors
+            /// Returns [`EntityRegistryError`] for invalid IDs or allocator state.
+            pub fn from_parts(
+                next_id: u64,
+                records: Vec<$record>,
+            ) -> Result<Self, EntityRegistryError> {
+                let mut entries = BTreeMap::new();
+                for record in records {
+                    if record.id.0 == 0 {
+                        return Err(EntityRegistryError::InvalidId);
+                    }
+                    if entries.insert(record.id, record).is_some() {
+                        return Err(EntityRegistryError::DuplicateId);
+                    }
+                }
+                validate_next_id(next_id, entries.keys().map(|id| id.0))?;
+                Ok(Self { entries, next_id })
+            }
+
+            /// Creates one identity using the next deterministic stable ID.
+            ///
+            /// # Errors
+            /// Returns [`EntityRegistryError::IdExhausted`] if ID space is exhausted.
+            pub fn create(&mut self) -> Result<$id, EntityRegistryError> {
+                let id = $id(allocate_id(&mut self.next_id)?);
+                let previous = self.entries.insert(id, $record { id });
+                debug_assert!(previous.is_none());
+                Ok(id)
+            }
+
+            /// Removes one existing identity without recycling its ID.
+            ///
+            /// # Errors
+            /// Returns [`EntityRegistryError::UnknownEntity`] if absent.
+            pub fn remove(&mut self, id: $id) -> Result<$record, EntityRegistryError> {
+                self.entries
+                    .remove(&id)
+                    .ok_or(EntityRegistryError::UnknownEntity)
+            }
+
+            #[must_use]
+            pub const fn next_id(&self) -> u64 {
+                self.next_id
             }
         }
-        validate_next_id(next_id, entries.keys().map(|id| id.0))?;
-        Ok(Self { entries, next_id })
-    }
 
-    /// Creates one country identity using the next deterministic ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EntityRegistryError::IdExhausted`] if no further ID can be
-    /// issued.
-    pub fn create(&mut self) -> Result<CountryId, EntityRegistryError> {
-        let id = CountryId(allocate_id(&mut self.next_id)?);
-        let previous = self.entries.insert(id, CountryEntity { id });
-        debug_assert!(previous.is_none());
-        Ok(id)
-    }
+        impl Default for $registry {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
 
-    /// Removes an existing country identity.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EntityRegistryError::UnknownEntity`] if the ID is absent.
-    pub fn remove(&mut self, id: CountryId) -> Result<CountryEntity, EntityRegistryError> {
-        self.entries
-            .remove(&id)
-            .ok_or(EntityRegistryError::UnknownEntity)
-    }
+        impl EntityRegistry for $registry {
+            type Id = $id;
+            type Record = $record;
+            type Iter<'a> = std::collections::btree_map::Values<'a, $id, $record>;
 
-    #[must_use]
-    pub const fn next_id(&self) -> u64 {
-        self.next_id
-    }
+            fn len(&self) -> usize {
+                self.entries.len()
+            }
+
+            fn get(&self, id: Self::Id) -> Option<&Self::Record> {
+                self.entries.get(&id)
+            }
+
+            fn iter(&self) -> Self::Iter<'_> {
+                self.entries.values()
+            }
+        }
+    };
 }
 
-impl Default for CountryRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl EntityRegistry for CountryRegistry {
-    type Id = CountryId;
-    type Record = CountryEntity;
-    type Iter<'a> = std::collections::btree_map::Values<'a, CountryId, CountryEntity>;
-
-    fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    fn get(&self, id: Self::Id) -> Option<&Self::Record> {
-        self.entries.get(&id)
-    }
-
-    fn iter(&self) -> Self::Iter<'_> {
-        self.entries.values()
-    }
-}
+identity_registry!(HumanGroupId, HumanGroupEntity, HumanGroupRegistry);
+identity_registry!(SettlementId, SettlementEntity, SettlementRegistry);
+identity_registry!(CommunityId, CommunityEntity, CommunityRegistry);
+identity_registry!(
+    PoliticalEntityId,
+    PoliticalEntity,
+    PoliticalEntityRegistry
+);
+identity_registry!(CountryId, CountryEntity, CountryRegistry);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CityEntity {
@@ -254,7 +303,6 @@ impl CityRegistry {
     /// Restores a city registry from canonical persisted parts.
     ///
     /// # Errors
-    ///
     /// Returns [`EntityRegistryError`] for invalid IDs or allocator state.
     pub fn from_parts(next_id: u64, records: Vec<CityEntity>) -> Result<Self, EntityRegistryError> {
         let mut entries = BTreeMap::new();
@@ -274,7 +322,6 @@ impl CityRegistry {
     /// Reference existence is validated at the aggregate world layer.
     ///
     /// # Errors
-    ///
     /// Returns [`EntityRegistryError::IdExhausted`] if no further ID can be
     /// issued.
     pub fn create(
@@ -298,7 +345,6 @@ impl CityRegistry {
     /// Removes an existing city identity.
     ///
     /// # Errors
-    ///
     /// Returns [`EntityRegistryError::UnknownEntity`] if the ID is absent.
     pub fn remove(&mut self, id: CityId) -> Result<CityEntity, EntityRegistryError> {
         self.entries
@@ -337,8 +383,16 @@ impl EntityRegistry for CityRegistry {
 }
 
 /// Non-spatial dynamic entity registries owned by `WorldState`.
+///
+/// Civilization-origin worlds legitimately begin with zero countries. The
+/// pre-state registries are first-class authoritative state and can evolve
+/// before any `Country` exists.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EntityWorldState {
+    pub human_groups: HumanGroupRegistry,
+    pub settlements: SettlementRegistry,
+    pub communities: CommunityRegistry,
+    pub political_entities: PoliticalEntityRegistry,
     pub countries: CountryRegistry,
     pub cities: CityRegistry,
 }
@@ -370,7 +424,8 @@ fn validate_next_id(
 #[cfg(test)]
 mod tests {
     use super::{
-        CityRegistry, CountryRegistry, EntityRegistry, EntityRegistryError, StableEntityId,
+        CityRegistry, CountryRegistry, EntityRegistry, EntityRegistryError, HumanGroupRegistry,
+        PoliticalEntityRegistry, SettlementRegistry, StableEntityId,
     };
 
     #[test]
@@ -387,6 +442,20 @@ mod tests {
         assert!(!registry.contains(first));
         assert!(registry.contains(second));
         assert!(registry.contains(third));
+    }
+
+    #[test]
+    fn civilization_origin_registries_share_monotonic_contract() {
+        let mut groups = HumanGroupRegistry::new();
+        let first_group = groups.create().expect("group 1");
+        groups.remove(first_group).expect("remove group");
+        assert_eq!(groups.create().expect("group 2").0, 2);
+
+        let mut settlements = SettlementRegistry::new();
+        assert_eq!(settlements.create().expect("settlement").0, 1);
+
+        let mut political_entities = PoliticalEntityRegistry::new();
+        assert_eq!(political_entities.create().expect("polity").0, 1);
     }
 
     #[test]
