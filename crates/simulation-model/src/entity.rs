@@ -109,7 +109,7 @@ impl HumanGroupInitialState {
     }
 }
 
-/// Stable hook for the later KnowledgeState system. Stage 3.1 defines the
+/// Stable hook for the later `KnowledgeState` system. Stage 3.1 defines the
 /// reference boundary without introducing a fixed technology tree or a
 /// Knowledge registry ahead of Stage 4.5.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -135,7 +135,7 @@ impl MemoryStateRef {
     }
 }
 
-/// Canonical HumanGroup ancestry used by future split/merge operations.
+/// Canonical `HumanGroup` ancestry used by future split/merge operations.
 /// `merged_from` must be strictly ID-sorted and duplicate-free so hashing and
 /// replay remain deterministic.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -150,10 +150,10 @@ impl HumanGroupLineage {
     pub fn is_valid_for(&self, id: HumanGroupId) -> bool {
         let direct_refs_valid = self
             .parent
-            .is_none_or(|parent| parent.0 != 0 && parent != id)
+            .map_or(true, |parent| parent.0 != 0 && parent != id)
             && self
                 .split_from
-                .is_none_or(|source| source.0 != 0 && source != id);
+                .map_or(true, |source| source.0 != 0 && source != id);
         let merged_refs_valid = self
             .merged_from
             .iter()
@@ -163,7 +163,7 @@ impl HumanGroupLineage {
     }
 }
 
-/// Stage 3 authoritative HumanGroup runtime-state schema.
+/// Stage 3 authoritative `HumanGroup` runtime-state schema.
 ///
 /// This type deliberately contains only primitive survival-era state and
 /// references to later Knowledge/Memory systems. Settlement, political and
@@ -197,8 +197,8 @@ impl HumanGroupState {
             && self.nutrition_permille <= 1_000
             && self.cohesion_permille <= 1_000
             && self.risk_permille <= 1_000
-            && self.knowledge_ref.is_none_or(KnowledgeStateRef::is_valid)
-            && self.memory_ref.is_none_or(MemoryStateRef::is_valid)
+            && self.knowledge_ref.map_or(true, KnowledgeStateRef::is_valid)
+            && self.memory_ref.map_or(true, MemoryStateRef::is_valid)
             && self.lineage.is_valid_for(self.id)
     }
 }
