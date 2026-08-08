@@ -91,6 +91,17 @@ Initial pairwise contact information is derived from integer geographic distance
 
 The calculation provides only geometric contact possibility. Trade, conflict, diplomacy, culture and state relations are not created here.
 
+## Pre-state invariant
+
+After Stage 2.6 initialization:
+
+- HumanGroup entities may exist.
+- Country, City, Settlement, Community and PoliticalEntity registries remain empty.
+- Region legal ownership and control remain unclaimed.
+- no modern state boundary, capital, GDP, tax or fiscal system is activated by the initializer.
+
+This invariant has dedicated acceptance coverage and is also required by the permanent Stage 2.6 source contract.
+
 ## Determinism
 
 Same world data + same configuration + same seed must produce identical:
